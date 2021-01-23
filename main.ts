@@ -2,6 +2,7 @@ import { Construct }                  from 'constructs';
 import { App, TerraformStack, Token } from 'cdktf';
 import {
   AwsProvider,
+  IamRole,
   Vpc,
   Subnet,
   EcsCluster,
@@ -18,6 +19,40 @@ class FargateStack extends TerraformStack {
       region: 'ap-northeast-1'
     });
 
+    const ecstaskrole = new IamRole(this , 'ecsTaskRole',{
+      name: 'ecsTaskRole_for_CDKTF',
+      assumeRolePolicy: `{
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Action": "sts:AssumeRole",
+            "Principal": {
+              "Service": "ecs-tasks.amazonaws.com"
+            },
+            "Effect": "Allow",
+            "Sid": ""
+          }
+        ]
+      }`
+    });
+
+    const ecsTaskExecutionRole = new IamRole(this , 'ecsTaskExecutionRole',{
+      name: 'ecsTaskExecutionRole_for_CDKTF',
+      assumeRolePolicy: `{
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Action": "sts:AssumeRole",
+            "Principal": {
+              "Service": "ecs-tasks.amazonaws.com"
+            },
+            "Effect": "Allow",
+            "Sid": ""
+          }
+        ]
+      }`
+    });
+
     const vpc = new Vpc(this, 'Vpc-cdk-for-terraform', {
       cidrBlock: '10.0.0.0/16',
       tags:      { ['Name']: 'ECS cdk-for-terraform' }
@@ -30,18 +65,8 @@ class FargateStack extends TerraformStack {
       tags:             { ['Name']: 'ECS cdk-for-terraform' }
     });
 
-    const ecs_cluster = new EcsCluster(this, 'cluster-cdk-for-terraform', {
+    const ecsCluster = new EcsCluster(this, 'cluster-cdk-for-terraform', {
       name: 'cluster-cdk-for-terraform'
-    });
-
-    new EcsService(this, 'container-cdk-for-terraform-service', {
-      cluster:                         ecs_cluster.id,
-      deploymentMaximumPercent:        200,
-      deploymentMinimumHealthyPercent: 100,
-      desiredCount:                    1,
-      launchType:                      'FARGATE',
-      name:                            'container-cdk-for-terraform-service',
-      platformVersion:                 'LATEST'
     });
 
     const imageName:      string = 'project/repository_cdk_for_terraform'
@@ -69,13 +94,26 @@ class FargateStack extends TerraformStack {
       }
     ]`
 
-    new EcsTaskDefinition(this, 'cdk-for-terraform', {
+    const ecsTaskDefinition = new EcsTaskDefinition(this, 'cdk-for-terraform', {
       containerDefinitions:    taskDefinition,
       family:                  'cdk-for-terraform',
       networkMode:             'awsvpc',
+      executionRoleArn:        ecsTaskExecutionRole.arn,
+      taskRoleArn:             ecstaskrole.arn,
       cpu:                     '256',
       memory:                  '512',
       requiresCompatibilities: ['FARGATE']
+    });
+
+    new EcsService(this, 'container-cdk-for-terraform-service', {
+      cluster:                         ecsCluster.id,
+      deploymentMaximumPercent:        200,
+      deploymentMinimumHealthyPercent: 100,
+      desiredCount:                    1,
+      launchType:                      'FARGATE',
+      name:                            'container-cdk-for-terraform-service',
+      platformVersion:                 'LATEST',
+      taskDefinition:                  ecsTaskDefinition.id
     });
 
     new EcrRepository(this, 'project/repository_cdk_for_terraform', {
