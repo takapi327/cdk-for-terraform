@@ -39,15 +39,15 @@ class FargateStack extends TerraformStack {
     const ecsTaskExecutionRole = new IamRole(this , 'ecsTaskExecutionRole',{
       name: 'ecsTaskExecutionRole_for_CDKTF',
       assumeRolePolicy: `{
-        "Version": "2012-10-17",
+        "Version":   "2012-10-17",
         "Statement": [
           {
-            "Action": "sts:AssumeRole",
+            "Action":    "sts:AssumeRole",
             "Principal": {
               "Service": "ecs-tasks.amazonaws.com"
             },
             "Effect": "Allow",
-            "Sid": ""
+            "Sid":    ""
           }
         ]
       }`
@@ -58,7 +58,7 @@ class FargateStack extends TerraformStack {
       tags:      { ['Name']: 'ECS cdk-for-terraform' }
     });
 
-    new Subnet(this, 'Subnet-cdk-for-terraform', {
+    const subnet = new Subnet(this, 'Subnet-cdk-for-terraform', {
       vpcId:            Token.asString(vpc.id),
       availabilityZone: 'ap-northeast-1a',
       cidrBlock:        '10.0.0.0/24',
@@ -113,7 +113,10 @@ class FargateStack extends TerraformStack {
       launchType:                      'FARGATE',
       name:                            'container-cdk-for-terraform-service',
       platformVersion:                 'LATEST',
-      taskDefinition:                  ecsTaskDefinition.id
+      taskDefinition:                  ecsTaskDefinition.id,
+      networkConfiguration:            [{
+        subnets: [subnet.id]
+      }]
     });
 
     new EcrRepository(this, 'project/repository_cdk_for_terraform', {
