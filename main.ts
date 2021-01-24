@@ -5,6 +5,7 @@ import {
   IamRole,
   Vpc,
   Subnet,
+  S3Bucket,
   EcsCluster,
   EcsService,
   EcrRepository,
@@ -121,6 +122,11 @@ class FargateStack extends TerraformStack {
 
     new EcrRepository(this, 'project/repository_cdk_for_terraform', {
       name: 'project/repository_cdk_for_terraform'
+    });
+
+    new S3Bucket(this, 'cdk-for-terraform', {
+      bucket: 'cdk-for-terraform',
+      region: 'ap-northeast-1'
     });
   }
 }
