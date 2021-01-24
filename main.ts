@@ -12,16 +12,16 @@ import {
   EcsTaskDefinition
 } from './.gen/providers/aws';
 
-class FargateStack extends TerraformStack {
+class CdktfStack extends TerraformStack {
   constructor(scope: Construct, name: string) {
     super(scope, name);
 
-    new AwsProvider(this, 'Aws-cdk-for-terraform', {
+    new AwsProvider(this, 'aws-for-cdktf', {
       region: 'ap-northeast-1'
     });
 
     const ecstaskrole = new IamRole(this , 'ecsTaskRole',{
-      name: 'ecsTaskRole_for_CDKTF',
+      name: 'ecsTaskRole_for_cdktf',
       assumeRolePolicy: `{
         "Version": "2012-10-17",
         "Statement": [
@@ -38,7 +38,7 @@ class FargateStack extends TerraformStack {
     });
 
     const ecsTaskExecutionRole = new IamRole(this , 'ecsTaskExecutionRole',{
-      name: 'ecsTaskExecutionRole_for_CDKTF',
+      name: 'ecsTaskExecutionRole_for_cdktf',
       assumeRolePolicy: `{
         "Version":   "2012-10-17",
         "Statement": [
@@ -54,28 +54,28 @@ class FargateStack extends TerraformStack {
       }`
     });
 
-    const vpc = new Vpc(this, 'Vpc-cdk-for-terraform', {
+    const vpc = new Vpc(this, 'vpc-for-cdktf', {
       cidrBlock: '10.0.0.0/16',
-      tags:      { ['Name']: 'ECS cdk-for-terraform' }
+      tags:      { ['Name']: 'ECS vpc-for-cdktf' }
     });
 
-    const subnet = new Subnet(this, 'Subnet-cdk-for-terraform', {
+    const subnet = new Subnet(this, 'subnet-for-cdktf', {
       vpcId:            Token.asString(vpc.id),
       availabilityZone: 'ap-northeast-1a',
       cidrBlock:        '10.0.0.0/24',
-      tags:             { ['Name']: 'ECS cdk-for-terraform' }
+      tags:             { ['Name']: 'ECS subnet-for-cdktf' }
     });
 
-    const ecsCluster = new EcsCluster(this, 'cluster-cdk-for-terraform', {
-      name: 'cluster-cdk-for-terraform'
+    const ecsCluster = new EcsCluster(this, 'cluster-for-cdktf', {
+      name: 'cluster-for-cdktf'
     });
 
-    const imageName:      string = 'project/repository_cdk_for_terraform'
+    const imageName:      string = 'project/repository_for_cdktf'
     const imageVersion:   string = 'latest'
     const taskDefinition: string = `[
       {
         "essential":    true,
-        "name":         "cdk-for-terraform",
+        "name":         "task-for-cdktf",
         "image":        "${imageName}:${imageVersion}",
         "portMappings": [
           {
@@ -87,7 +87,7 @@ class FargateStack extends TerraformStack {
         "logConfiguration": {
           "logDriver": "awslogs",
           "options": {
-            "awslogs-group":         "ecs/cdk-for-terraform",
+            "awslogs-group":         "ecs/task-for-cdktf",
             "awslogs-stream-prefix": "ecs",
             "awslogs-region":        "ap-northeast-1"
           }
@@ -95,9 +95,9 @@ class FargateStack extends TerraformStack {
       }
     ]`
 
-    const ecsTaskDefinition = new EcsTaskDefinition(this, 'cdk-for-terraform', {
+    const ecsTaskDefinition = new EcsTaskDefinition(this, 'task-for-cdktf', {
       containerDefinitions:    taskDefinition,
-      family:                  'cdk-for-terraform',
+      family:                  'task-for-cdktf',
       networkMode:             'awsvpc',
       executionRoleArn:        ecsTaskExecutionRole.arn,
       taskRoleArn:             ecstaskrole.arn,
@@ -106,13 +106,13 @@ class FargateStack extends TerraformStack {
       requiresCompatibilities: ['FARGATE']
     });
 
-    new EcsService(this, 'container-cdk-for-terraform-service', {
+    new EcsService(this, 'container-for-cdktf-service', {
       cluster:                         ecsCluster.id,
       deploymentMaximumPercent:        200,
       deploymentMinimumHealthyPercent: 100,
       desiredCount:                    1,
       launchType:                      'FARGATE',
-      name:                            'container-cdk-for-terraform-service',
+      name:                            'container-for-cdktf-service',
       platformVersion:                 'LATEST',
       taskDefinition:                  ecsTaskDefinition.id,
       networkConfiguration:            [{
@@ -120,17 +120,18 @@ class FargateStack extends TerraformStack {
       }]
     });
 
-    new EcrRepository(this, 'project/repository_cdk_for_terraform', {
-      name: 'project/repository_cdk_for_terraform'
+    new EcrRepository(this, 'project/repository_for_cdktf', {
+      name: 'project/repository_for_cdktf'
     });
 
-    new S3Bucket(this, 'cdk-for-terraform', {
-      bucket: 'cdk-for-terraform',
+    new S3Bucket(this, 's3-for-cdktf', {
+      bucket: 's3-for-cdktf',
       region: 'ap-northeast-1'
     });
+
   }
 }
 
 const app = new App();
-new FargateStack(app, 'cdk-for-terraform');
+new CdktfStack(app, 'cdktf');
 app.synth();
