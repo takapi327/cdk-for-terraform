@@ -9,7 +9,7 @@ echo copy package.json
 cp -f ./package.json ./update-image0of-ecr-dist
 
 echo install module
-cd api-dist
+cd update-image0of-ecr-dist
 npm install
 
 echo zip

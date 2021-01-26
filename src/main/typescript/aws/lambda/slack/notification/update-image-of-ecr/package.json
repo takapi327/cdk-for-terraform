@@ -1,0 +1,16 @@
+{
+  "name": "update-image-of-ecr",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "sh ./build.sh",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@slack/web-api": "^6.0.0",
+    "typescript": "^4.1.3"
+  }
+}
