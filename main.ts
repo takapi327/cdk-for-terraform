@@ -5,6 +5,7 @@ import {
   IamRole,
   Vpc,
   Subnet,
+  SecurityGroup,
   S3Bucket,
   EcsCluster,
   EcsService,
@@ -59,11 +60,23 @@ class CdktfStack extends TerraformStack {
       tags:      { ['Name']: 'ECS vpc-for-cdktf' }
     });
 
-    const subnet = new Subnet(this, 'subnet-for-cdktf', {
+    const subnet1 = new Subnet(this, 'subnet-for-cdktf', {
       vpcId:            Token.asString(vpc.id),
       availabilityZone: 'ap-northeast-1a',
       cidrBlock:        '10.0.0.0/24',
-      tags:             { ['Name']: 'ECS subnet-for-cdktf' }
+      tags:             { ['Name']: 'ECS subnet-for-cdktf Public Subnet1' }
+    });
+
+    const subnet2 = new Subnet(this, 'subnet-for-cdktf', {
+      vpcId:            Token.asString(vpc.id),
+      availabilityZone: 'ap-northeast-1a',
+      cidrBlock:        '10.0.0.0/24',
+      tags:             { ['Name']: 'ECS subnet-for-cdktf Public Subnet2' }
+    });
+
+    const security = new SecurityGroup(this, 'security-for-cdktf', {
+      name: 'security-for-cdktf',
+      vpcId: Token.asString(vpc.id)
     });
 
     const ecsCluster = new EcsCluster(this, 'cluster-for-cdktf', {
@@ -116,7 +129,8 @@ class CdktfStack extends TerraformStack {
       platformVersion:                 'LATEST',
       taskDefinition:                  ecsTaskDefinition.id,
       networkConfiguration:            [{
-        subnets: [subnet.id]
+        securityGroups: [security.id],
+        subnets:        [subnet1.id, subnet2.id]
       }]
     });
 
