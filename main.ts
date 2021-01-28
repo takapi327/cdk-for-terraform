@@ -17,8 +17,11 @@ class CdktfStack extends TerraformStack {
   constructor(scope: Construct, name: string) {
     super(scope, name);
 
+    const REGION:      string = 'ap-northeast-1'
+    const LAUNCH_TYPE: string = 'FARGATE'
+
     new AwsProvider(this, 'aws-for-cdktf', {
-      region: 'ap-northeast-1'
+      region: REGION
     });
 
     const ecstaskrole = new IamRole(this , 'ecsTaskRole',{
@@ -62,14 +65,14 @@ class CdktfStack extends TerraformStack {
 
     const subnet1 = new Subnet(this, 'subnet-for-cdktf', {
       vpcId:            Token.asString(vpc.id),
-      availabilityZone: 'ap-northeast-1a',
+      availabilityZone: REGION,
       cidrBlock:        '10.0.0.0/24',
       tags:             { ['Name']: 'ECS subnet-for-cdktf Public Subnet1' }
     });
 
     const subnet2 = new Subnet(this, 'subnet-for-cdktf', {
       vpcId:            Token.asString(vpc.id),
-      availabilityZone: 'ap-northeast-1a',
+      availabilityZone: REGION,
       cidrBlock:        '10.0.0.0/24',
       tags:             { ['Name']: 'ECS subnet-for-cdktf Public Subnet2' }
     });
@@ -116,7 +119,7 @@ class CdktfStack extends TerraformStack {
       taskRoleArn:             ecstaskrole.arn,
       cpu:                     '256',
       memory:                  '512',
-      requiresCompatibilities: ['FARGATE']
+      requiresCompatibilities: [LAUNCH_TYPE]
     });
 
     new EcsService(this, 'container-for-cdktf-service', {
@@ -124,7 +127,7 @@ class CdktfStack extends TerraformStack {
       deploymentMaximumPercent:        200,
       deploymentMinimumHealthyPercent: 100,
       desiredCount:                    1,
-      launchType:                      'FARGATE',
+      launchType:                      LAUNCH_TYPE,
       name:                            'container-for-cdktf-service',
       platformVersion:                 'LATEST',
       taskDefinition:                  ecsTaskDefinition.id,
@@ -140,7 +143,7 @@ class CdktfStack extends TerraformStack {
 
     new S3Bucket(this, 's3-for-cdktf', {
       bucket: 's3-for-cdktf',
-      region: 'ap-northeast-1'
+      region: REGION
     });
 
   }
