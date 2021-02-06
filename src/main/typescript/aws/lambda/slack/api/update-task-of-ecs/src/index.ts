@@ -1,6 +1,6 @@
 import { WebClient } from '@slack/web-api';
-import AWS           from 'aws-sdk';
-import ECS           from 'aws-sdk/clients/ecs';
+import * as AWS      from 'aws-sdk';
+import * as ECS      from 'aws-sdk/clients/ecs';
 
 const web = new WebClient(process.env.SLACK_API_TOKEN);
 const ecs = new AWS.ECS({region: 'ap-northeast-1'});
@@ -111,7 +111,7 @@ exports.handler = async(event: any) => {
     /**
      * @SEE https://github.com/aws/aws-sdk-js/blob/1ad9d3ca76d56051e106fdf70f123a02047ebafe/clients/ecs.d.ts#L290
      */
-    ecs.registerTaskDefinition(RegisterTaskDefinitionRequest, function(err, data) {
+    ecs.registerTaskDefinition(RegisterTaskDefinitionRequest, function(err: AWS.AWSError, data: ECS.RegisterTaskDefinitionResponse) {
       if(err) console.log(`タスクの作成に失敗しました:${JSON.stringify(err)}`);
       else    console.log(`タスクの作成に成功しました:${JSON.stringify(data)}`);
     });
@@ -119,7 +119,7 @@ exports.handler = async(event: any) => {
     /**
      * @SEE https://github.com/aws/aws-sdk-js/blob/1ad9d3ca76d56051e106fdf70f123a02047ebafe/clients/ecs.d.ts#L394
      */
-    await ecs.updateService(UpdateServiceRequest, function(err, data) {
+    await ecs.updateService(UpdateServiceRequest, function(err: AWS.AWSError, data: ECS.UpdateServiceResponse) {
       if(err) console.log(`サービスの更新に失敗しました:${JSON.stringify(err)}`)
       else    console.log(`サービスの更新に成功しました:${JSON.stringify(data)}`)
     }).promise();
