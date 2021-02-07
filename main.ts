@@ -10,7 +10,10 @@ import {
   EcsCluster,
   EcsService,
   EcrRepository,
-  EcsTaskDefinition
+  EcsTaskDefinition,
+  LambdaFunction,
+  SnsTopic,
+  SnsTopicSubscription
 } from './.gen/providers/aws';
 
 class CdktfStack extends TerraformStack {
@@ -70,7 +73,7 @@ class CdktfStack extends TerraformStack {
       tags:             { ['Name']: 'ECS subnet-for-cdktf Public Subnet1' }
     });
 
-    const subnet2 = new Subnet(this, 'subnet-for-cdktf', {
+    const subnet2 = new Subnet(this, 'subnet-for-cdktf2', {
       vpcId:            Token.asString(vpc.id),
       availabilityZone: REGION,
       cidrBlock:        '10.0.0.0/24',
@@ -141,11 +144,30 @@ class CdktfStack extends TerraformStack {
       name: 'project/repository_for_cdktf'
     });
 
-    new S3Bucket(this, 's3-for-cdktf', {
+    const s3Bucket = new S3Bucket(this, 's3-for-cdktf', {
       bucket: 's3-for-cdktf',
       region: REGION
     });
 
+    const lambda = new LambdaFunction(this, 'cdktf_for_slick', {
+      functionName: 'cdktf_for_slick',
+      handler:      'index.handler',
+      role:         ecstaskrole.arn,
+      runtime:      'Node.js 12.x',
+      s3Bucket:     s3Bucket.bucket,
+      s3Key:        'update-image-of-ecr-dist.zip',
+      timeout:      30
+    });
+
+    const snsTopic = new SnsTopic(this, '', {
+      name: 'cdktf_for_sns'
+    });
+
+    new SnsTopicSubscription(this, 'cdktf_for_sns_subscription', {
+      endpoint: lambda.arn,
+      protocol: 'AWS Lambda',
+      topicArn: snsTopic.arn
+    });
   }
 }
 
