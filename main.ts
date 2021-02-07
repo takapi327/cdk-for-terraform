@@ -13,7 +13,7 @@ import {
   EcsTaskDefinition,
   LambdaFunction,
   SnsTopic,
-  SnsTopicSubscription
+  SnsTopicSubscription,
 } from './.gen/providers/aws';
 
 class CdktfStack extends TerraformStack {
@@ -149,14 +149,25 @@ class CdktfStack extends TerraformStack {
       region: REGION
     });
 
-    const lambda = new LambdaFunction(this, 'cdktf_for_slick', {
+    const lambda_for_sns = new LambdaFunction(this, 'cdktf_for_slick', {
       functionName: 'cdktf_for_slick',
       handler:      'index.handler',
       role:         ecstaskrole.arn,
       runtime:      'Node.js 12.x',
       s3Bucket:     s3Bucket.bucket,
       s3Key:        'update-image-of-ecr-dist.zip',
-      timeout:      30
+      timeout:      30,
+      environment:  [
+        {
+          variables: { ['SLACK_API_TOKEN']: 'xoxb-1276255441778-1526109750944-TGCkzAQ2w8oM8UcgtQIxWzjv' }
+        },
+        {
+          variables: { ['SLACK_CHANNEL']: 'C017PFW6D1D' }
+        },
+        {
+          variables: { ['SLACK_SIGNING_SECRET']: '5db9d3349e7830b149daf815e84067e4' }
+        }
+      ]
     });
 
     const snsTopic = new SnsTopic(this, '', {
@@ -164,7 +175,7 @@ class CdktfStack extends TerraformStack {
     });
 
     new SnsTopicSubscription(this, 'cdktf_for_sns_subscription', {
-      endpoint: lambda.arn,
+      endpoint: lambda_for_sns.arn,
       protocol: 'AWS Lambda',
       topicArn: snsTopic.arn
     });
