@@ -14,6 +14,10 @@ import {
   LambdaFunction,
   SnsTopic,
   SnsTopicSubscription,
+  ApiGatewayRestApi,
+  ApiGatewayMethod,
+  ApiGatewayResource,
+  Apigatewayv2Api
 } from './.gen/providers/aws';
 
 class CdktfStack extends TerraformStack {
@@ -140,7 +144,7 @@ class CdktfStack extends TerraformStack {
       }]
     });
 
-    new EcrRepository(this, 'project/repository_for_cdktf', {
+    const ecsRepository = new EcrRepository(this, 'project/repository_for_cdktf', {
       name: 'project/repository_for_cdktf'
     });
 
@@ -149,8 +153,8 @@ class CdktfStack extends TerraformStack {
       region: REGION
     });
 
-    const lambda_for_sns = new LambdaFunction(this, 'cdktf_for_slick', {
-      functionName: 'cdktf_for_slick',
+    const lambda_for_sns = new LambdaFunction(this, 'cdktf_for_slack_sns', {
+      functionName: 'cdktf_for_slack_sns',
       handler:      'index.handler',
       role:         ecstaskrole.arn,
       runtime:      'Node.js 12.x',
@@ -170,6 +174,33 @@ class CdktfStack extends TerraformStack {
       ]
     });
 
+    const lambda_for_slack_api = new LambdaFunction(this, 'cdktf_for_slack_api', {
+      functionName: 'cdktf_for_slack_api',
+      handler:      'index.handler',
+      role:         ecstaskrole.arn,
+      runtime:      'Node.js 12.x',
+      s3Bucket:     s3Bucket.bucket,
+      s3Key:        'update-task-of-ecs-dist.zip',
+      timeout:      30,
+      environment:  [
+        {
+          variables: { ['CLUSTER_NAME']: ecsCluster.arn }
+        },
+        {
+          variables: { ['DOCKER_IMAGE_PATH']: ecsRepository.arn }
+        },
+        {
+          variables: { ['SLACK_API_TOKEN']: 'xoxb-1276255441778-1526109750944-TGCkzAQ2w8oM8UcgtQIxWzjv' }
+        },
+        {
+          variables: { ['SLACK_CHANNEL']: 'C017PFW6D1D' }
+        },
+        {
+          variables: { ['TARGET_GROUP_ARN']: '' }
+        }
+      ]
+    });
+
     const snsTopic = new SnsTopic(this, '', {
       name: 'cdktf_for_sns'
     });
@@ -178,6 +209,29 @@ class CdktfStack extends TerraformStack {
       endpoint: lambda_for_sns.arn,
       protocol: 'AWS Lambda',
       topicArn: snsTopic.arn
+    });
+
+    const apiGateway = new Apigatewayv2Api(this, '', {
+      name:         'cdktf_for_apigateway',
+      description:  'Slackの情報更新とSNSの起動を行う',
+      protocolType: 'REST'
+    });
+
+    const apiGatewayRestApi = new ApiGatewayRestApi(this, 'cdktf_for_apigateway', {
+      name: 'cdktf_for_apigateway'
+    });
+
+    const apiGatewayResource = new ApiGatewayResource(this, '', {
+      parentId:  apiGateway.id,
+      pathPart:  '/',
+      restApiId: apiGatewayRestApi.id
+    });
+
+    new ApiGatewayMethod(this, '', {
+      authorization: '',
+      httpMethod:    'POST',
+      resourceId:    apiGatewayResource.id,
+      restApiId:     apiGatewayRestApi.id
     });
   }
 }
