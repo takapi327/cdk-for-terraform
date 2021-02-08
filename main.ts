@@ -17,7 +17,9 @@ import {
   ApiGatewayRestApi,
   ApiGatewayMethod,
   ApiGatewayResource,
-  Apigatewayv2Api
+  ApiGatewayDeployment,
+  ApiGatewayStage,
+  ApiGatewayIntegration
 } from './.gen/providers/aws';
 
 class CdktfStack extends TerraformStack {
@@ -211,27 +213,39 @@ class CdktfStack extends TerraformStack {
       topicArn: snsTopic.arn
     });
 
-    const apiGateway = new Apigatewayv2Api(this, '', {
-      name:         'cdktf_for_apigateway',
-      description:  'Slackの情報更新とSNSの起動を行う',
-      protocolType: 'REST'
-    });
-
-    const apiGatewayRestApi = new ApiGatewayRestApi(this, 'cdktf_for_apigateway', {
+    const apiGateway = new ApiGatewayRestApi(this, 'cdktf_for_api_rest', {
       name: 'cdktf_for_apigateway'
     });
 
-    const apiGatewayResource = new ApiGatewayResource(this, '', {
-      parentId:  apiGateway.id,
+    const apiGatewayResource = new ApiGatewayResource(this, 'cdktf_for_api_resourc', {
+      parentId:  apiGateway.rootResourceId,
       pathPart:  '/',
-      restApiId: apiGatewayRestApi.id
+      restApiId: apiGateway.id
     });
 
-    new ApiGatewayMethod(this, '', {
-      authorization: '',
+    new ApiGatewayMethod(this, 'cdktf_for_api_method', {
+      authorization: 'NONE',
       httpMethod:    'POST',
       resourceId:    apiGatewayResource.id,
-      restApiId:     apiGatewayRestApi.id
+      restApiId:     apiGateway.id
+    });
+
+    const apiDeploy = new ApiGatewayDeployment(this, 'cdktf_for_apideploy', {
+      restApiId: apiGateway.id
+    });
+
+    new ApiGatewayStage(this, 'cdktf_for_api_stage', {
+      deploymentId: apiDeploy.id,
+      restApiId:    apiGateway.id,
+      stageName:    'cdktf_for_apistage'
+    });
+
+    new ApiGatewayIntegration(this, 'cdktf_for_api_integration', {
+      httpMethod: 'POST',
+      restApiId:  apiGateway.id,
+      resourceId: apiGatewayResource.id,
+      type:       'AWS_PROXY',
+      uri:        lambda_for_slack_api.arn
     });
   }
 }
