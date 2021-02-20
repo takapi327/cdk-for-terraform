@@ -1,5 +1,6 @@
 import { Construct }                  from 'constructs';
 import { App, TerraformStack, Token } from 'cdktf';
+import * as path from 'path';
 import {
   AwsProvider,
   IamRole,
@@ -7,6 +8,7 @@ import {
   Subnet,
   SecurityGroup,
   S3Bucket,
+  S3BucketObject,
   EcsCluster,
   EcsService,
   EcrRepository,
@@ -67,6 +69,23 @@ class CdktfStack extends TerraformStack {
       }`
     });
 
+    const lambdaExecutionRole = new IamRole(this , 'lambdaExecutionRole',{
+      name: 'lambdaExecutionRole_for_cdktf',
+      assumeRolePolicy: `{
+        "Version":   "2012-10-17",
+        "Statement": [
+          {
+            "Action":    "sts:AssumeRole",
+            "Principal": {
+              "Service": "lambda.amazonaws.com"
+            },
+            "Effect": "Allow",
+            "Sid":    ""
+          }
+        ]
+      }`
+    });
+
     const vpc = new Vpc(this, 'vpc-for-cdktf', {
       cidrBlock: '10.0.0.0/16',
       tags:      { ['Name']: 'ECS vpc-for-cdktf' }
@@ -74,15 +93,15 @@ class CdktfStack extends TerraformStack {
 
     const subnet1 = new Subnet(this, 'subnet-for-cdktf', {
       vpcId:            Token.asString(vpc.id),
-      availabilityZone: REGION,
+      availabilityZone: 'ap-northeast-1a',
       cidrBlock:        '10.0.0.0/24',
       tags:             { ['Name']: 'ECS subnet-for-cdktf Public Subnet1' }
     });
 
     const subnet2 = new Subnet(this, 'subnet-for-cdktf2', {
       vpcId:            Token.asString(vpc.id),
-      availabilityZone: REGION,
-      cidrBlock:        '10.0.0.0/24',
+      availabilityZone: 'ap-northeast-1c',
+      cidrBlock:        '10.0.1.0/24',
       tags:             { ['Name']: 'ECS subnet-for-cdktf Public Subnet2' }
     });
 
@@ -155,61 +174,62 @@ class CdktfStack extends TerraformStack {
       region: REGION
     });
 
+    new S3BucketObject(this, 'update-image-of-ecr-dist.zip', {
+      bucket:      s3Bucket.bucket,
+      key:         'update-image-of-ecr-dist.zip',
+      contentType: 'zip',
+      source:      path.resolve('./src/main/typescript/aws/lambda/slack/notification/update-image-of-ecr/update-image-of-ecr-dist/update-image-of-ecr-dist.zip')
+    });
+
+    new S3BucketObject(this, 'update-task-of-ecs-dist.zip', {
+      bucket:      s3Bucket.bucket,
+      key:         'update-task-of-ecs-dist.zip',
+      contentType: 'zip',
+      source:      path.resolve('./src/main/typescript/aws/lambda/slack/api/update-task-of-ecs/update-task-of-ecs-dist/update-task-of-ecs-dist.zip')
+    });
+
     const lambda_for_sns = new LambdaFunction(this, 'cdktf_for_slack_sns', {
       functionName: 'cdktf_for_slack_sns',
       handler:      'index.handler',
-      role:         ecstaskrole.arn,
-      runtime:      'Node.js 12.x',
+      role:         lambdaExecutionRole.arn,
+      runtime:      'nodejs12.x',
       s3Bucket:     s3Bucket.bucket,
       s3Key:        'update-image-of-ecr-dist.zip',
       timeout:      30,
-      environment:  [
-        {
-          variables: { ['SLACK_API_TOKEN']: 'xoxb-1276255441778-1526109750944-TGCkzAQ2w8oM8UcgtQIxWzjv' }
-        },
-        {
-          variables: { ['SLACK_CHANNEL']: 'C017PFW6D1D' }
-        },
-        {
-          variables: { ['SLACK_SIGNING_SECRET']: '5db9d3349e7830b149daf815e84067e4' }
+      environment:  [{
+        variables: {
+          ['SLACK_API_TOKEN']:      'xoxb-1276255441778-1526109750944-TGCkzAQ2w8oM8UcgtQIxWzjv',
+          ['SLACK_CHANNEL']:        'C017PFW6D1D',
+          ['SLACK_SIGNING_SECRET']: '5db9d3349e7830b149daf815e84067e4'
         }
-      ]
+      }]
     });
 
     const lambda_for_slack_api = new LambdaFunction(this, 'cdktf_for_slack_api', {
       functionName: 'cdktf_for_slack_api',
       handler:      'index.handler',
-      role:         ecstaskrole.arn,
-      runtime:      'Node.js 12.x',
+      role:         lambdaExecutionRole.arn,
+      runtime:      'nodejs12.x',
       s3Bucket:     s3Bucket.bucket,
       s3Key:        'update-task-of-ecs-dist.zip',
       timeout:      30,
-      environment:  [
-        {
-          variables: { ['CLUSTER_NAME']: ecsCluster.arn }
-        },
-        {
-          variables: { ['DOCKER_IMAGE_PATH']: ecsRepository.arn }
-        },
-        {
-          variables: { ['SLACK_API_TOKEN']: 'xoxb-1276255441778-1526109750944-TGCkzAQ2w8oM8UcgtQIxWzjv' }
-        },
-        {
-          variables: { ['SLACK_CHANNEL']: 'C017PFW6D1D' }
-        },
-        {
-          variables: { ['TARGET_GROUP_ARN']: '' }
+      environment:  [{
+        variables: {
+          ['CLUSTER_NAME']:      ecsCluster.arn,
+          ['DOCKER_IMAGE_PATH']: ecsRepository.arn,
+          ['SLACK_API_TOKEN']:   'xoxb-1276255441778-1526109750944-TGCkzAQ2w8oM8UcgtQIxWzjv',
+          ['SLACK_CHANNEL']:     'C017PFW6D1D'
         }
-      ]
+      }]
     });
 
-    const snsTopic = new SnsTopic(this, '', {
+    const snsTopic = new SnsTopic(this, 'cdktf_for_sns', {
       name: 'cdktf_for_sns'
     });
 
     new SnsTopicSubscription(this, 'cdktf_for_sns_subscription', {
       endpoint: lambda_for_sns.arn,
-      protocol: 'AWS Lambda',
+      protocol: 'lambda',
       topicArn: snsTopic.arn
     });
 
@@ -217,9 +237,9 @@ class CdktfStack extends TerraformStack {
       name: 'cdktf_for_apigateway'
     });
 
-    const apiGatewayResource = new ApiGatewayResource(this, 'cdktf_for_api_resourc', {
+    const apiGatewayResource = new ApiGatewayResource(this, 'cdktf_for_api_resource', {
       parentId:  apiGateway.rootResourceId,
-      pathPart:  '/',
+      pathPart:  'slack-deployment',
       restApiId: apiGateway.id
     });
 
