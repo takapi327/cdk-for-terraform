@@ -14,10 +14,12 @@ import {
   EcrRepository,
   EcsTaskDefinition,
   LambdaFunction,
+  LambdaPermission,
   SnsTopic,
   SnsTopicSubscription,
   ApiGatewayRestApi,
   ApiGatewayMethod,
+  ApiGatewayMethodResponse,
   ApiGatewayResource,
   ApiGatewayDeployment,
   ApiGatewayStage,
@@ -233,6 +235,13 @@ class CdktfStack extends TerraformStack {
       topicArn: snsTopic.arn
     });
 
+    new LambdaPermission(this, 'lambda_permission_for_cdktf_lambda_sns', {
+      action:       'lambda:InvokeFunction',
+      functionName: lambda_for_sns.functionName,
+      principal:    'sns.amazonaws.com',
+      sourceArn:    snsTopic.arn
+    });
+
     const apiGateway = new ApiGatewayRestApi(this, 'cdktf_for_api_rest', {
       name: 'cdktf_for_apigateway'
     });
@@ -243,11 +252,27 @@ class CdktfStack extends TerraformStack {
       restApiId: apiGateway.id
     });
 
-    new ApiGatewayMethod(this, 'cdktf_for_api_method', {
+    const apiMethod = new ApiGatewayMethod(this, 'cdktf_for_api_method', {
       authorization: 'NONE',
       httpMethod:    'POST',
       resourceId:    apiGatewayResource.id,
       restApiId:     apiGateway.id
+    });
+
+    new ApiGatewayMethodResponse(this, 'cdktf_for_api_method_response', {
+      httpMethod: apiMethod.httpMethod,
+      resourceId: apiGatewayResource.id,
+      restApiId:  apiGateway.id,
+      statusCode: '200'
+    });
+
+    new ApiGatewayIntegration(this, 'cdktf_for_api_integration', {
+      httpMethod:            apiMethod.httpMethod,
+      restApiId:             apiGateway.id,
+      resourceId:            apiGatewayResource.id,
+      integrationHttpMethod: 'POST',
+      type:                  'AWS_PROXY',
+      uri:                   lambda_for_slack_api.invokeArn
     });
 
     const apiDeploy = new ApiGatewayDeployment(this, 'cdktf_for_apideploy', {
@@ -260,13 +285,14 @@ class CdktfStack extends TerraformStack {
       stageName:    'cdktf_for_apistage'
     });
 
-    new ApiGatewayIntegration(this, 'cdktf_for_api_integration', {
-      httpMethod: 'POST',
-      restApiId:  apiGateway.id,
-      resourceId: apiGatewayResource.id,
-      type:       'AWS_PROXY',
-      uri:        lambda_for_slack_api.arn
+    new LambdaPermission(this, 'lambda_permission_for_cdktf_lambda_api', {
+      action:       'lambda:InvokeFunction',
+      functionName: lambda_for_slack_api.functionName,
+      principal:    'apigateway.amazonaws.com',
+      sourceArn:    apiGateway.arn,
+      statementId:  'AllowExecutionFromAPIGateway'
     });
+
   }
 }
 
