@@ -25,7 +25,8 @@ import {
   ApiGatewayStage,
   ApiGatewayIntegration,
   CloudwatchEventRule,
-  CloudwatchEventTarget
+  CloudwatchEventTarget,
+  CloudwatchLogGroup
 } from './.gen/providers/aws';
 
 class CdktfStack extends TerraformStack {
@@ -204,9 +205,13 @@ class CdktfStack extends TerraformStack {
         variables: {
           ['SLACK_API_TOKEN']:      'xoxb-1276255441778-1782007042404-sSybUERnFKYRyHTHecs3kvr0',
           ['SLACK_CHANNEL']:        'C017PFW6D1D',
-          ['SLACK_SIGNING_SECRET']: '5db9d3349e7830b149daf815e84067e4'
+          ['SLACK_SIGNING_SECRET']: '967223f0520093c9f14d82d76e513441'
         }
       }]
+    });
+
+    new CloudwatchLogGroup(this, 'lambda_for_sns_log_group', {
+      name: `/aws/lambda/${lambda_for_sns.functionName}`
     });
 
     const lambda_for_slack_api = new LambdaFunction(this, 'cdktf_for_slack_api', {
@@ -225,6 +230,10 @@ class CdktfStack extends TerraformStack {
           ['SLACK_CHANNEL']:     'C017PFW6D1D'
         }
       }]
+    });
+
+    new CloudwatchLogGroup(this, 'lambda_for_slack_api_log_group', {
+      name: `/aws/lambda/${lambda_for_slack_api.functionName}`
     });
 
     const snsTopic = new SnsTopic(this, 'cdktf_for_sns', {
