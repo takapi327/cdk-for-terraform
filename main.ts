@@ -23,7 +23,7 @@ import {
   ApiGatewayResource,
   ApiGatewayDeployment,
   ApiGatewayStage,
-  ApiGatewayIntegration
+  ApiGatewayIntegration,
 } from './.gen/providers/aws';
 
 class CdktfStack extends TerraformStack {
@@ -200,7 +200,7 @@ class CdktfStack extends TerraformStack {
       timeout:      30,
       environment:  [{
         variables: {
-          ['SLACK_API_TOKEN']:      'xoxb-1276255441778-1526109750944-TGCkzAQ2w8oM8UcgtQIxWzjv',
+          ['SLACK_API_TOKEN']:      'xoxb-1276255441778-1782007042404-sSybUERnFKYRyHTHecs3kvr0',
           ['SLACK_CHANNEL']:        'C017PFW6D1D',
           ['SLACK_SIGNING_SECRET']: '5db9d3349e7830b149daf815e84067e4'
         }
@@ -219,7 +219,7 @@ class CdktfStack extends TerraformStack {
         variables: {
           ['CLUSTER_NAME']:      ecsCluster.arn,
           ['DOCKER_IMAGE_PATH']: ecsRepository.arn,
-          ['SLACK_API_TOKEN']:   'xoxb-1276255441778-1526109750944-TGCkzAQ2w8oM8UcgtQIxWzjv',
+          ['SLACK_API_TOKEN']:   'xoxb-1276255441778-1782007042404-sSybUERnFKYRyHTHecs3kvr0',
           ['SLACK_CHANNEL']:     'C017PFW6D1D'
         }
       }]
@@ -248,7 +248,7 @@ class CdktfStack extends TerraformStack {
 
     const apiGatewayResource = new ApiGatewayResource(this, 'cdktf_for_api_resource', {
       parentId:  apiGateway.rootResourceId,
-      pathPart:  'slack-deployment',
+      pathPart:  'ecs-deploy',
       restApiId: apiGateway.id
     });
 
@@ -263,7 +263,10 @@ class CdktfStack extends TerraformStack {
       httpMethod: apiMethod.httpMethod,
       resourceId: apiGatewayResource.id,
       restApiId:  apiGateway.id,
-      statusCode: '200'
+      statusCode: '200',
+      responseModels: {
+        'application/json': 'Empty'
+      }
     });
 
     new ApiGatewayIntegration(this, 'cdktf_for_api_integration', {
@@ -289,8 +292,8 @@ class CdktfStack extends TerraformStack {
       action:       'lambda:InvokeFunction',
       functionName: lambda_for_slack_api.functionName,
       principal:    'apigateway.amazonaws.com',
-      sourceArn:    apiGateway.arn,
-      statementId:  'AllowExecutionFromAPIGateway'
+      sourceArn:    `${apiGateway.executionArn}/*/${apiMethod.httpMethod}/${apiGatewayResource.pathPart}`,
+      statementId:  'AllowAPIGatewayInvoke'
     });
 
   }
