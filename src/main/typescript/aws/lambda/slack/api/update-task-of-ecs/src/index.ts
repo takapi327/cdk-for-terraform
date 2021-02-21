@@ -10,7 +10,7 @@ const CLUSTER_NAME      = process.env.CLUSTER_NAME
 
 const TASK_NAME:      string = 'task-for-cdktf'
 const CONTAINER_NAME: string = 'container-for-cdktf'
-const SERVICE_NAME:   string = 'container-for-cdktf-servic'
+const SERVICE_NAME:   string = 'container-for-cdktf-service'
 const LAUNCH_TYPE:    string = 'FARGATE'
 const PORT_NUMBER:    number = 9000
 const DESIRED_COUNT:  number = 1
@@ -72,8 +72,8 @@ exports.handler = async(event: any) => {
    * @SEE https://github.com/aws/aws-sdk-js/blob/1ad9d3ca76d56051e106fdf70f123a02047ebafe/clients/ecs.d.ts#L522
    */
   const AwsVpcConfiguration: ECS.AwsVpcConfiguration = {
-    subnets:        ['', ''],
-    securityGroups: [''],
+    subnets:        ['subnet-002668a58337c8345', 'subnet-0dc790f172c9d0086'],
+    securityGroups: ['sg-07e1d362cb919292d'],
     assignPublicIp: 'ENABLED'
   }
 
