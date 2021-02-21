@@ -24,6 +24,7 @@ import {
   ApiGatewayDeployment,
   ApiGatewayStage,
   ApiGatewayIntegration,
+  CloudwatchEventRule,
 } from './.gen/providers/aws';
 
 class CdktfStack extends TerraformStack {
@@ -296,6 +297,10 @@ class CdktfStack extends TerraformStack {
       statementId:  'AllowAPIGatewayInvoke'
     });
 
+    new CloudwatchEventRule(this, '', {
+      name:        'capture_aws_ecr_update',
+      description: 'Capture each AWS ECR Update'
+    });
   }
 }
 
