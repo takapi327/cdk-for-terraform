@@ -4,6 +4,8 @@ import * as path from 'path';
 import {
   AwsProvider,
   IamRole,
+  IamPolicy,
+  IamRolePolicyAttachment,
   Vpc,
   Subnet,
   SecurityGroup,
@@ -80,7 +82,7 @@ class CdktfStack extends TerraformStack {
         "Version":   "2012-10-17",
         "Statement": [
           {
-            "Action":    "sts:AssumeRole",
+            "Action": "sts:AssumeRole",
             "Principal": {
               "Service": "lambda.amazonaws.com"
             },
@@ -89,6 +91,30 @@ class CdktfStack extends TerraformStack {
           }
         ]
       }`
+    });
+
+    const lambdaExecutionIamPolicy = new IamPolicy(this, 'lambda_logging', {
+      name:        'lambda_logging',
+      description: 'IAM policy for logging from a lambda',
+      policy: `{
+        "Version":   "2012-10-17",
+        "Statement": [
+          {
+            "Action":    [
+              "logs:CreateLogGroup",
+              "logs:CreateLogStream",
+              "logs:PutLogEvents"
+            ],
+            "Resource": "arn:aws:logs:*:*:*",
+            "Effect": "Allow"
+          }
+        ]
+      }`
+    });
+
+    new IamRolePolicyAttachment(this, 'lambda_policy_attach', {
+      role:      lambdaExecutionRole.name,
+      policyArn: lambdaExecutionIamPolicy.arn
     });
 
     const vpc = new Vpc(this, 'vpc-for-cdktf', {
