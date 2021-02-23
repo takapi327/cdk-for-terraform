@@ -7,6 +7,9 @@ const ecs = new AWS.ECS({region: 'ap-northeast-1'});
 
 const DOCKER_IMAGE_PATH = process.env.DOCKER_IMAGE_PATH
 const CLUSTER_NAME      = process.env.CLUSTER_NAME
+const SUBNET_1          = process.env.SUBNET_1!
+const SUBNET_2          = process.env.SUBNET_2!
+const SECURITY          = process.env.SECURITY!
 
 const TASK_NAME:      string = 'task-for-cdktf'
 const CONTAINER_NAME: string = 'container-for-cdktf'
@@ -72,8 +75,8 @@ exports.handler = async(event: any) => {
    * @SEE https://github.com/aws/aws-sdk-js/blob/1ad9d3ca76d56051e106fdf70f123a02047ebafe/clients/ecs.d.ts#L522
    */
   const AwsVpcConfiguration: ECS.AwsVpcConfiguration = {
-    subnets:        ['subnet-002668a58337c8345', 'subnet-0dc790f172c9d0086'],
-    securityGroups: ['sg-07e1d362cb919292d'],
+    subnets:        [SUBNET_1, SUBNET_2],
+    securityGroups: [SECURITY],
     assignPublicIp: 'ENABLED'
   }
 
