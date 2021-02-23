@@ -356,14 +356,16 @@ class CdktfStack extends TerraformStack {
         "detail-type": ["ECR Image Action"],
         "detail": {
           "action-type": ["PUSH"],
-          "result": ["SUCCESS"]
+          "result": ["SUCCESS"],
+          "repository-name": [${ecsRepository.name}]
         }
       }`
     });
 
     new CloudwatchEventTarget(this, 'cdktf_for_event_target', {
-      arn:  snsTopic.arn,
-      rule: eventRule.name
+      arn:      snsTopic.arn,
+      rule:     eventRule.name,
+      targetId: 'SendToSNS'
     });
   }
 }
