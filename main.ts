@@ -84,37 +84,16 @@ class CdktfStack extends TerraformStack {
           {
             "Action": "sts:AssumeRole",
             "Principal": {
-              "Service": "lambda.amazonaws.com"
+              "Service": [
+                "lambda.amazonaws.com",
+                "ecs-tasks.amazonaws.com"
+              ]
             },
             "Effect": "Allow",
             "Sid":    ""
           }
         ]
       }`
-    });
-
-    const lambdaExecutionIamPolicy = new IamPolicy(this, 'lambda_logging', {
-      name:        'lambda_logging',
-      description: 'IAM policy for logging from a lambda',
-      policy: `{
-        "Version":   "2012-10-17",
-        "Statement": [
-          {
-            "Action":    [
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:PutLogEvents"
-            ],
-            "Resource": "arn:aws:logs:*:*:*",
-            "Effect": "Allow"
-          }
-        ]
-      }`
-    });
-
-    new IamRolePolicyAttachment(this, 'lambda_policy_attach', {
-      role:      lambdaExecutionRole.name,
-      policyArn: lambdaExecutionIamPolicy.arn
     });
 
     const vpc = new Vpc(this, 'vpc-for-cdktf', {
@@ -181,7 +160,7 @@ class CdktfStack extends TerraformStack {
       requiresCompatibilities: [LAUNCH_TYPE]
     });
 
-    new EcsService(this, 'container-for-cdktf-service', {
+    const ecsService = new EcsService(this, 'container-for-cdktf-service', {
       cluster:                         ecsCluster.id,
       deploymentMaximumPercent:        200,
       deploymentMinimumHealthyPercent: 100,
@@ -194,6 +173,38 @@ class CdktfStack extends TerraformStack {
         securityGroups: [security.id],
         subnets:        [subnet1.id, subnet2.id]
       }]
+    });
+
+    const lambdaExecutionIamPolicy = new IamPolicy(this, 'lambda_logging', {
+      name:        'lambda_logging',
+      description: 'IAM policy for logging from a lambda',
+      policy: `{
+        "Version":   "2012-10-17",
+        "Statement": [
+          {
+            "Action": [
+              "iam:PassRole",
+              "ecs:RegisterTaskDefinition",
+              "ecs:UpdateService",
+              "logs:CreateLogGroup",
+              "logs:CreateLogStream",
+              "logs:PutLogEvents"
+            ],
+            "Resource": [
+              "*",
+              "arn:aws:logs:*:*:*",
+              "arn:aws:ecs:${REGION}:445682127642:service/${ecsCluster.name}/${ecsService.name}",
+              "arn:aws:iam::445682127642:role/ecsTaskExecutionRole_for_cdktf"
+            ],
+            "Effect": "Allow"
+          }
+        ]
+      }`
+    });
+
+    new IamRolePolicyAttachment(this, 'lambda_policy_attach', {
+      role:      lambdaExecutionRole.name,
+      policyArn: lambdaExecutionIamPolicy.arn
     });
 
     const ecsRepository = new EcrRepository(this, 'project/repository_for_cdktf', {
@@ -253,7 +264,10 @@ class CdktfStack extends TerraformStack {
           ['CLUSTER_NAME']:      ecsCluster.arn,
           ['DOCKER_IMAGE_PATH']: ecsRepository.arn,
           ['SLACK_API_TOKEN']:   'xoxb-1276255441778-1782007042404-sSybUERnFKYRyHTHecs3kvr0',
-          ['SLACK_CHANNEL']:     'C017PFW6D1D'
+          ['SLACK_CHANNEL']:     'C017PFW6D1D',
+          ['SUBNET_1']:          subnet1.id,
+          ['SUBNET_2']:          subnet2.id,
+          ['SECURITY']:          security.id
         }
       }]
     });
@@ -276,7 +290,8 @@ class CdktfStack extends TerraformStack {
       action:       'lambda:InvokeFunction',
       functionName: lambda_for_sns.functionName,
       principal:    'sns.amazonaws.com',
-      sourceArn:    snsTopic.arn
+      sourceArn:    snsTopic.arn,
+      statementId:  'AllowExecutionFromSNS'
     });
 
     const apiGateway = new ApiGatewayRestApi(this, 'cdktf_for_api_rest', {
