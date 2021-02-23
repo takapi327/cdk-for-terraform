@@ -26,6 +26,11 @@ import {
   ApiGatewayDeployment,
   ApiGatewayStage,
   ApiGatewayIntegration,
+  Alb,
+  AlbTargetGroup,
+  //AlbTargetGroupAttachment,
+  AlbListener,
+  AlbListenerRule,
   CloudwatchEventRule,
   CloudwatchEventTarget,
   CloudwatchLogGroup
@@ -356,8 +361,7 @@ class CdktfStack extends TerraformStack {
         "detail-type": ["ECR Image Action"],
         "detail": {
           "action-type": ["PUSH"],
-          "result": ["SUCCESS"],
-          "repository-name": [${ecsRepository.name}]
+          "result": ["SUCCESS"]
         }
       }`
     });
@@ -366,6 +370,64 @@ class CdktfStack extends TerraformStack {
       arn:      snsTopic.arn,
       rule:     eventRule.name,
       targetId: 'SendToSNS'
+    });
+
+    const alb = new Alb(this, 'cdktf_for_alb', {
+      name:             'cdktf-for-alb',
+      internal:         false,
+      loadBalancerType: 'application',
+      securityGroups:   [security.id],
+      subnets:          [subnet1.id, subnet2.id],
+      ipAddressType:    'ipv4',
+      enableHttp2:      true
+    });
+
+    const albTargetGroup = new AlbTargetGroup(this, 'cdktf_for_alb_target_group', {
+      name:       'cdktf-for-alb-target-group',
+      port:       9000,
+      protocol:   'HTTP',
+      targetType: 'ip',
+      vpcId:      vpc.id,
+      healthCheck: [{
+        interval:           30,
+        path:               '/',
+        port:               'traffic-port',
+        protocol:           'HTTP',
+        timeout:            5,
+        unhealthyThreshold: 2
+      }]
+    });
+
+    /*
+    new AlbTargetGroupAttachment(this, 'cdktf_for_alb_target_attachment', {
+      availabilityZone: 'ap-northeast-1a',
+      port:             9000,
+      targetGroupArn:   albTargetGroup.arn,
+      targetId:         ecsTaskDefinition.containerDefinitions
+    });
+     */
+
+    const albListener = new AlbListener(this, 'cdktf_for_alb_listener', {
+      loadBalancerArn: alb.arn,
+      port:            443,
+      protocol:        'HTTP',
+      defaultAction:   [{
+        targetGroupArn: albTargetGroup.arn,
+        type:           'forward'
+      }]
+    });
+
+    new AlbListenerRule(this, 'cdktf_for_alb_listener_rule', {
+      listenerArn: albListener.arn,
+      priority:    100,
+      action:      [{
+        type:          'forward',
+        targetGroupArn: albTargetGroup.arn
+      }],
+      condition: [{
+        field: 'path-pattern',
+        values: ['/target/']
+      }]
     });
   }
 }
