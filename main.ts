@@ -7,8 +7,10 @@ import {
   IamPolicy,
   IamRolePolicyAttachment,
   Vpc,
+  InternetGateway,
   Subnet,
   SecurityGroup,
+  SecurityGroupRule,
   S3Bucket,
   S3BucketObject,
   EcsCluster,
@@ -28,7 +30,6 @@ import {
   ApiGatewayIntegration,
   Alb,
   AlbTargetGroup,
-  //AlbTargetGroupAttachment,
   AlbListener,
   AlbListenerRule,
   CloudwatchEventRule,
@@ -106,6 +107,10 @@ class CdktfStack extends TerraformStack {
       tags:      { ['Name']: 'ECS vpc-for-cdktf' }
     });
 
+    new InternetGateway(this, 'gateway-for-cdktf', {
+      vpcId: vpc.id
+    });
+
     const subnet1 = new Subnet(this, 'subnet-for-cdktf', {
       vpcId:            Token.asString(vpc.id),
       availabilityZone: 'ap-northeast-1a',
@@ -125,16 +130,74 @@ class CdktfStack extends TerraformStack {
       vpcId: Token.asString(vpc.id)
     });
 
+    new SecurityGroupRule(this, 'security-ingress-for-cdktf', {
+      cidrBlocks:      [vpc.cidrBlock],
+      fromPort:        9000,
+      protocol:        'tcp',
+      securityGroupId: security.id,
+      toPort:          9000,
+      type:            'ingress'
+    });
+
+    const alb = new Alb(this, 'cdktf_for_alb', {
+      name:             'cdktf-for-alb',
+      internal:         false,
+      loadBalancerType: 'application',
+      securityGroups:   [security.id],
+      subnets:          [subnet1.id, subnet2.id],
+      ipAddressType:    'ipv4',
+      enableHttp2:      true
+    });
+
+    const albTargetGroup = new AlbTargetGroup(this, 'cdktf_for_alb_target_group', {
+      name:       'cdktf-for-alb-target-group',
+      port:       9000,
+      protocol:   'HTTP',
+      targetType: 'ip',
+      vpcId:      vpc.id,
+      healthCheck: [{
+        interval:           30,
+        path:               '/',
+        port:               'traffic-port',
+        protocol:           'HTTP',
+        timeout:            5,
+        unhealthyThreshold: 2
+      }]
+    });
+
+    const albListener = new AlbListener(this, 'cdktf_for_alb_listener', {
+      loadBalancerArn: alb.arn,
+      port:            9000,
+      protocol:        'HTTP',
+      defaultAction:   [{
+        targetGroupArn: albTargetGroup.arn,
+        type:           'forward'
+      }]
+    });
+
+    new AlbListenerRule(this, 'cdktf_for_alb_listener_rule', {
+      listenerArn: albListener.arn,
+      priority:    100,
+      action:      [{
+        type:          'forward',
+        targetGroupArn: albTargetGroup.arn
+      }],
+      condition: [{
+        field: 'path-pattern',
+        values: ['/target/']
+      }]
+    });
+
     const ecsCluster = new EcsCluster(this, 'cluster-for-cdktf', {
       name: 'cluster-for-cdktf'
     });
 
-    const imageName:      string = 'project/repository_for_cdktf'
-    const imageVersion:   string = 'latest'
-    const taskDefinition: string = `[
+    const imageName:           string = 'project/repository_for_cdktf'
+    const imageVersion:        string = 'latest'
+    const containerDefinition: string = `[
       {
         "essential":    true,
-        "name":         "task-for-cdktf",
+        "name":         "container-for-cdktf",
         "image":        "${imageName}:${imageVersion}",
         "portMappings": [
           {
@@ -155,7 +218,7 @@ class CdktfStack extends TerraformStack {
     ]`
 
     const ecsTaskDefinition = new EcsTaskDefinition(this, 'task-for-cdktf', {
-      containerDefinitions:    taskDefinition,
+      containerDefinitions:    containerDefinition,
       family:                  'task-for-cdktf',
       networkMode:             'awsvpc',
       executionRoleArn:        ecsTaskExecutionRole.arn,
@@ -177,6 +240,11 @@ class CdktfStack extends TerraformStack {
       networkConfiguration:            [{
         securityGroups: [security.id],
         subnets:        [subnet1.id, subnet2.id]
+      }],
+      loadBalancer: [{
+        containerName:  'container-for-cdktf',
+        containerPort:  9000,
+        targetGroupArn: albTargetGroup.arn
       }]
     });
 
@@ -370,64 +438,6 @@ class CdktfStack extends TerraformStack {
       arn:      snsTopic.arn,
       rule:     eventRule.name,
       targetId: 'SendToSNS'
-    });
-
-    const alb = new Alb(this, 'cdktf_for_alb', {
-      name:             'cdktf-for-alb',
-      internal:         false,
-      loadBalancerType: 'application',
-      securityGroups:   [security.id],
-      subnets:          [subnet1.id, subnet2.id],
-      ipAddressType:    'ipv4',
-      enableHttp2:      true
-    });
-
-    const albTargetGroup = new AlbTargetGroup(this, 'cdktf_for_alb_target_group', {
-      name:       'cdktf-for-alb-target-group',
-      port:       9000,
-      protocol:   'HTTP',
-      targetType: 'ip',
-      vpcId:      vpc.id,
-      healthCheck: [{
-        interval:           30,
-        path:               '/',
-        port:               'traffic-port',
-        protocol:           'HTTP',
-        timeout:            5,
-        unhealthyThreshold: 2
-      }]
-    });
-
-    /*
-    new AlbTargetGroupAttachment(this, 'cdktf_for_alb_target_attachment', {
-      availabilityZone: 'ap-northeast-1a',
-      port:             9000,
-      targetGroupArn:   albTargetGroup.arn,
-      targetId:         ecsTaskDefinition.containerDefinitions
-    });
-     */
-
-    const albListener = new AlbListener(this, 'cdktf_for_alb_listener', {
-      loadBalancerArn: alb.arn,
-      port:            443,
-      protocol:        'HTTP',
-      defaultAction:   [{
-        targetGroupArn: albTargetGroup.arn,
-        type:           'forward'
-      }]
-    });
-
-    new AlbListenerRule(this, 'cdktf_for_alb_listener_rule', {
-      listenerArn: albListener.arn,
-      priority:    100,
-      action:      [{
-        type:          'forward',
-        targetGroupArn: albTargetGroup.arn
-      }],
-      condition: [{
-        field: 'path-pattern',
-        values: ['/target/']
-      }]
     });
   }
 }
