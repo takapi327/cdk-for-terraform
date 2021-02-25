@@ -21,6 +21,7 @@ import {
   LambdaPermission,
   SnsTopic,
   SnsTopicSubscription,
+  SnsTopicPolicy,
   ApiGatewayRestApi,
   ApiGatewayMethod,
   ApiGatewayMethodResponse,
@@ -357,6 +358,26 @@ class CdktfStack extends TerraformStack {
       endpoint: lambda_for_sns.arn,
       protocol: 'lambda',
       topicArn: snsTopic.arn
+    });
+
+    new SnsTopicPolicy(this, 'cdktf_for_sns_policy', {
+      arn: snsTopic.arn,
+      policy: `{
+        "Version":   "2012-10-17",
+        "Statement": {
+          "Effect": "Allow",
+          "Sid":    "",
+          "Principal": {
+            "Service": "events.amazonaws.com"
+          },
+          "Action": [
+            "SNS:Publish"
+          ],
+          "Resource": [
+            "*"
+          ]
+        }
+      }`
     });
 
     new LambdaPermission(this, 'lambda_permission_for_cdktf_lambda_sns', {
