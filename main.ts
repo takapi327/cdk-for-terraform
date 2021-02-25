@@ -224,8 +224,8 @@ class CdktfStack extends TerraformStack {
       networkMode:             'awsvpc',
       executionRoleArn:        ecsTaskExecutionRole.arn,
       taskRoleArn:             ecstaskrole.arn,
-      cpu:                     '256',
-      memory:                  '512',
+      cpu:                     '512',
+      memory:                  '1024',
       requiresCompatibilities: [LAUNCH_TYPE]
     });
 
