@@ -41,7 +41,7 @@ exports.handler = async(event: any) => {
   const LogConfiguration: ECS.LogConfiguration = {
     logDriver: 'awslogs',
     options:   {
-      'awslogs-group':         '/ecs/task-for-cdktf',
+      'awslogs-group':         '/aws/ecs/task-for-cdktf',
       'awslogs-region':        'ap-northeast-1',
       'awslogs-stream-prefix': 'ecs'
     }
