@@ -7,6 +7,8 @@ import {
   IamPolicy,
   IamRolePolicyAttachment,
   Vpc,
+  RouteTable,
+  RouteTableAssociation,
   InternetGateway,
   Subnet,
   SecurityGroup,
@@ -66,6 +68,43 @@ class CdktfStack extends TerraformStack {
       }`
     });
 
+    const ecsTaskIamPolicy = new IamPolicy(this, 'ecs_task_policy', {
+      name:        'ecs_task_policy',
+      description: 'Policy for updating ECS tasks',
+      policy: `{
+        "Version":   "2012-10-17",
+        "Statement": [
+          {
+            "Action": [
+              "ecs:DescribeServices",
+              "ecs:CreateTaskSet",
+              "ecs:UpdateServicePrimaryTaskSet",
+              "ecs:DeleteTaskSet",
+              "elasticloadbalancing:DescribeTargetGroups",
+              "elasticloadbalancing:DescribeListeners",
+              "elasticloadbalancing:ModifyListener",
+              "elasticloadbalancing:DescribeRules",
+              "elasticloadbalancing:ModifyRule",
+              "lambda:InvokeFunction",
+              "cloudwatch:DescribeAlarms",
+              "sns:Publish",
+              "s3:GetObject",
+              "s3:GetObjectVersion"
+            ],
+            "Resource": [
+              "*"
+            ],
+            "Effect": "Allow"
+          }
+        ]
+      }`
+    });
+
+    new IamRolePolicyAttachment(this, 'ecs_task_policy_attach', {
+      role:      ecstaskrole.name,
+      policyArn: ecsTaskIamPolicy.arn
+    });
+
     const ecsTaskExecutionRole = new IamRole(this , 'ecsTaskExecutionRole',{
       name: 'ecsTaskExecutionRole_for_cdktf',
       assumeRolePolicy: `{
@@ -81,6 +120,35 @@ class CdktfStack extends TerraformStack {
           }
         ]
       }`
+    });
+
+    const ecsTaskExecutionIamPolicy = new IamPolicy(this, 'ecs_task_execution_policy', {
+      name:        'ecs_task_execution_policy',
+      description: 'Policy for updating ECS tasks',
+      policy: `{
+        "Version":   "2012-10-17",
+        "Statement": [
+          {
+            "Action": [
+              "ecr:GetAuthorizationToken",
+              "ecr:BatchCheckLayerAvailability",
+              "ecr:GetDownloadUrlForLayer",
+              "ecr:BatchGetImage",
+              "logs:CreateLogStream",
+              "logs:PutLogEvents"
+            ],
+            "Resource": [
+              "*"
+            ],
+            "Effect": "Allow"
+          }
+        ]
+      }`
+    });
+
+    new IamRolePolicyAttachment(this, 'ecs_task_attach', {
+      role:      ecsTaskExecutionRole.name,
+      policyArn: ecsTaskExecutionIamPolicy.arn
     });
 
     const lambdaExecutionRole = new IamRole(this , 'lambdaExecutionRole',{
@@ -104,27 +172,68 @@ class CdktfStack extends TerraformStack {
     });
 
     const vpc = new Vpc(this, 'vpc-for-cdktf', {
-      cidrBlock: '10.0.0.0/16',
-      tags:      { ['Name']: 'ECS vpc-for-cdktf' }
+      cidrBlock:          '10.0.0.0/16',
+      enableDnsHostnames: true,
+      tags:               { ['Name']: 'ECS vpc-for-cdktf' }
     });
 
-    new InternetGateway(this, 'gateway-for-cdktf', {
-      vpcId: vpc.id
+    const internetGateway = new InternetGateway(this, 'gateway-for-cdktf', {
+      vpcId: vpc.id,
+      tags:  {
+        'Name': 'ECS vpc-for-cdktf - InternetGateway'
+      }
+    });
+
+    const routeTable = new RouteTable(this, 'route-for-cdktf', {
+      vpcId: vpc.id,
+      route: [{
+        cidrBlock:              '0.0.0.0/0',
+        gatewayId:              internetGateway.id,
+        ipv6CidrBlock:          '',
+        egressOnlyGatewayId:    '',
+        instanceId:             '',
+        natGatewayId:           '',
+        networkInterfaceId:     '',
+        transitGatewayId:       '',
+        vpcPeeringConnectionId: ''
+      }],
+      tags: {
+        'Name': 'ECS route-table-for-cdktf'
+      }
     });
 
     const subnet1 = new Subnet(this, 'subnet-for-cdktf', {
-      vpcId:            Token.asString(vpc.id),
-      availabilityZone: 'ap-northeast-1a',
-      cidrBlock:        '10.0.0.0/24',
-      tags:             { ['Name']: 'ECS subnet-for-cdktf Public Subnet1' }
+      vpcId:               Token.asString(vpc.id),
+      availabilityZone:    'ap-northeast-1a',
+      cidrBlock:           '10.0.0.0/24',
+      mapPublicIpOnLaunch: true,
+      tags:                { ['Name']: 'ECS subnet-for-cdktf Public Subnet1' }
     });
 
     const subnet2 = new Subnet(this, 'subnet-for-cdktf2', {
-      vpcId:            Token.asString(vpc.id),
-      availabilityZone: 'ap-northeast-1c',
-      cidrBlock:        '10.0.1.0/24',
-      tags:             { ['Name']: 'ECS subnet-for-cdktf Public Subnet2' }
+      vpcId:               Token.asString(vpc.id),
+      availabilityZone:    'ap-northeast-1c',
+      cidrBlock:           '10.0.1.0/24',
+      mapPublicIpOnLaunch: true,
+      tags:                { ['Name']: 'ECS subnet-for-cdktf Public Subnet2' }
     });
+
+    new RouteTableAssociation(this, 'route-for-cdktf1', {
+      routeTableId: routeTable.id,
+      subnetId:     subnet1.id
+    });
+
+    new RouteTableAssociation(this, 'route-for-cdktf2', {
+      routeTableId: routeTable.id,
+      subnetId:     subnet2.id
+    });
+
+    /*
+    new RouteTableAssociation(this, 'route-for-cdktf3', {
+      gatewayId:    internetGateway.id,
+      routeTableId: routeTable.id,
+    });
+    */
 
     const security = new SecurityGroup(this, 'security-for-cdktf', {
       name: 'security-for-cdktf',
@@ -138,6 +247,15 @@ class CdktfStack extends TerraformStack {
       securityGroupId: security.id,
       toPort:          9000,
       type:            'ingress'
+    });
+
+    new SecurityGroupRule(this, 'security-egress-for-cdktf', {
+      cidrBlocks:      ['0.0.0.0/0'],
+      fromPort:        0,
+      protocol:        'all',
+      securityGroupId: security.id,
+      toPort:          0,
+      type:            'egress'
     });
 
     const alb = new Alb(this, 'cdktf_for_alb', {
@@ -193,13 +311,16 @@ class CdktfStack extends TerraformStack {
       name: 'cluster-for-cdktf'
     });
 
-    const imageName:           string = 'project/repository_for_cdktf'
+    const ecsRepository = new EcrRepository(this, 'project/repository_for_cdktf', {
+      name: 'project/repository_for_cdktf'
+    });
+
     const imageVersion:        string = 'latest'
     const containerDefinition: string = `[
       {
         "essential":    true,
         "name":         "container-for-cdktf",
-        "image":        "${imageName}:${imageVersion}",
+        "image":        "${ecsRepository.repositoryUrl}:${imageVersion}",
         "portMappings": [
           {
             "hostPort":      9000,
@@ -210,7 +331,7 @@ class CdktfStack extends TerraformStack {
         "logConfiguration": {
           "logDriver": "awslogs",
           "options": {
-            "awslogs-group":         "ecs/task-for-cdktf",
+            "awslogs-group":         "/aws/ecs/task-for-cdktf",
             "awslogs-stream-prefix": "ecs",
             "awslogs-region":        "ap-northeast-1"
           }
@@ -239,6 +360,7 @@ class CdktfStack extends TerraformStack {
       platformVersion:                 'LATEST',
       taskDefinition:                  ecsTaskDefinition.id,
       networkConfiguration:            [{
+        assignPublicIp: true,
         securityGroups: [security.id],
         subnets:        [subnet1.id, subnet2.id]
       }],
@@ -281,10 +403,6 @@ class CdktfStack extends TerraformStack {
       policyArn: lambdaExecutionIamPolicy.arn
     });
 
-    const ecsRepository = new EcrRepository(this, 'project/repository_for_cdktf', {
-      name: 'project/repository_for_cdktf'
-    });
-
     const s3Bucket = new S3Bucket(this, 's3-for-cdktf', {
       bucket: 's3-for-cdktf',
       region: REGION
@@ -325,6 +443,10 @@ class CdktfStack extends TerraformStack {
       name: `/aws/lambda/${lambda_for_sns.functionName}`
     });
 
+    new CloudwatchLogGroup(this, 'ecs_task_log_group', {
+      name: `/aws/ecs/${ecsTaskDefinition.family}`
+    });
+
     const lambda_for_slack_api = new LambdaFunction(this, 'cdktf_for_slack_api', {
       functionName: 'cdktf_for_slack_api',
       handler:      'index.handler',
@@ -336,7 +458,7 @@ class CdktfStack extends TerraformStack {
       environment:  [{
         variables: {
           ['CLUSTER_NAME']:      ecsCluster.arn,
-          ['DOCKER_IMAGE_PATH']: ecsRepository.arn,
+          ['DOCKER_IMAGE_PATH']: ecsRepository.repositoryUrl,
           ['SLACK_API_TOKEN']:   'xoxb-1276255441778-1782007042404-sSybUERnFKYRyHTHecs3kvr0',
           ['SLACK_CHANNEL']:     'C017PFW6D1D',
           ['SUBNET_1']:          subnet1.id,
