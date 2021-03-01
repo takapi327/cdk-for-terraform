@@ -1,18 +1,8 @@
 import { Construct }                  from 'constructs';
-import { App, TerraformStack, Token } from 'cdktf';
+import { App, TerraformStack } from 'cdktf';
 import * as path from 'path';
 import {
   AwsProvider,
-  IamRole,
-  IamPolicy,
-  IamRolePolicyAttachment,
-  Vpc,
-  RouteTable,
-  RouteTableAssociation,
-  InternetGateway,
-  Subnet,
-  SecurityGroup,
-  SecurityGroupRule,
   S3Bucket,
   S3BucketObject,
   EcsCluster,
@@ -40,6 +30,10 @@ import {
   CloudwatchLogGroup
 } from './.gen/providers/aws';
 
+import { EcsTaskRoleModule, EcsTaskExecutionRoleModule, LambdaExecutionRoleModule } from './lib/module'
+import { VpcModule, InternetGatewayModule, RouteTableModule, SubnetModule } from './lib/module/networkLayer'
+import { SecurityModule } from './lib/module/securityLayer'
+
 class CdktfStack extends TerraformStack {
   constructor(scope: Construct, name: string) {
     super(scope, name);
@@ -51,212 +45,31 @@ class CdktfStack extends TerraformStack {
       region: REGION
     });
 
-    const ecstaskrole = new IamRole(this , 'ecsTaskRole',{
-      name: 'ecsTaskRole_for_cdktf',
-      assumeRolePolicy: `{
-        "Version": "2012-10-17",
-        "Statement": [
-          {
-            "Action": "sts:AssumeRole",
-            "Principal": {
-              "Service": "ecs-tasks.amazonaws.com"
-            },
-            "Effect": "Allow",
-            "Sid": ""
-          }
-        ]
-      }`
-    });
+    const ecsTaskRole      = EcsTaskRoleModule.createRole(this)
+    const ecsTaskIamPolicy = EcsTaskRoleModule.createPolicy(this)
+    EcsTaskRoleModule.attachmentRole(this, ecsTaskRole, ecsTaskIamPolicy)
 
-    const ecsTaskIamPolicy = new IamPolicy(this, 'ecs_task_policy', {
-      name:        'ecs_task_policy',
-      description: 'Policy for updating ECS tasks',
-      policy: `{
-        "Version":   "2012-10-17",
-        "Statement": [
-          {
-            "Action": [
-              "ecs:DescribeServices",
-              "ecs:CreateTaskSet",
-              "ecs:UpdateServicePrimaryTaskSet",
-              "ecs:DeleteTaskSet",
-              "elasticloadbalancing:DescribeTargetGroups",
-              "elasticloadbalancing:DescribeListeners",
-              "elasticloadbalancing:ModifyListener",
-              "elasticloadbalancing:DescribeRules",
-              "elasticloadbalancing:ModifyRule",
-              "lambda:InvokeFunction",
-              "cloudwatch:DescribeAlarms",
-              "sns:Publish",
-              "s3:GetObject",
-              "s3:GetObjectVersion"
-            ],
-            "Resource": [
-              "*"
-            ],
-            "Effect": "Allow"
-          }
-        ]
-      }`
-    });
+    const ecsTaskExecutionRole      = EcsTaskExecutionRoleModule.createRole(this)
+    const ecsTaskExecutionIamPolicy = EcsTaskExecutionRoleModule.createPolicy(this)
+    EcsTaskExecutionRoleModule.attachmentRole(this, ecsTaskRole, ecsTaskExecutionIamPolicy)
 
-    new IamRolePolicyAttachment(this, 'ecs_task_policy_attach', {
-      role:      ecstaskrole.name,
-      policyArn: ecsTaskIamPolicy.arn
-    });
+    const lambdaExecutionRole      = LambdaExecutionRoleModule.createRole(this)
+    const lambdaExecutionIamPolicy = LambdaExecutionRoleModule.createPolicy(this)
+    LambdaExecutionRoleModule.attachmentRole(this, lambdaExecutionRole, lambdaExecutionIamPolicy)
 
-    const ecsTaskExecutionRole = new IamRole(this , 'ecsTaskExecutionRole',{
-      name: 'ecsTaskExecutionRole_for_cdktf',
-      assumeRolePolicy: `{
-        "Version":   "2012-10-17",
-        "Statement": [
-          {
-            "Action":    "sts:AssumeRole",
-            "Principal": {
-              "Service": "ecs-tasks.amazonaws.com"
-            },
-            "Effect": "Allow",
-            "Sid":    ""
-          }
-        ]
-      }`
-    });
+    const vpc             = VpcModule.create(this)
+    const internetGateway = InternetGatewayModule.create(this, vpc)
+    const routeTable      = RouteTableModule.create(this, vpc, internetGateway)
 
-    const ecsTaskExecutionIamPolicy = new IamPolicy(this, 'ecs_task_execution_policy', {
-      name:        'ecs_task_execution_policy',
-      description: 'Policy for updating ECS tasks',
-      policy: `{
-        "Version":   "2012-10-17",
-        "Statement": [
-          {
-            "Action": [
-              "ecr:GetAuthorizationToken",
-              "ecr:BatchCheckLayerAvailability",
-              "ecr:GetDownloadUrlForLayer",
-              "ecr:BatchGetImage",
-              "logs:CreateLogStream",
-              "logs:PutLogEvents"
-            ],
-            "Resource": [
-              "*"
-            ],
-            "Effect": "Allow"
-          }
-        ]
-      }`
-    });
+    const subnet1 = SubnetModule.create1(this, vpc)
+    const subnet2 = SubnetModule.create2(this, vpc)
 
-    new IamRolePolicyAttachment(this, 'ecs_task_attach', {
-      role:      ecsTaskExecutionRole.name,
-      policyArn: ecsTaskExecutionIamPolicy.arn
-    });
+    RouteTableModule.association(this, routeTable, subnet1, 'route-for-cdktf1')
+    RouteTableModule.association(this, routeTable, subnet2, 'route-for-cdktf2')
 
-    const lambdaExecutionRole = new IamRole(this , 'lambdaExecutionRole',{
-      name: 'lambdaExecutionRole_for_cdktf',
-      assumeRolePolicy: `{
-        "Version":   "2012-10-17",
-        "Statement": [
-          {
-            "Action": "sts:AssumeRole",
-            "Principal": {
-              "Service": [
-                "lambda.amazonaws.com",
-                "ecs-tasks.amazonaws.com"
-              ]
-            },
-            "Effect": "Allow",
-            "Sid":    ""
-          }
-        ]
-      }`
-    });
-
-    const vpc = new Vpc(this, 'vpc-for-cdktf', {
-      cidrBlock:          '10.0.0.0/16',
-      enableDnsHostnames: true,
-      tags:               { ['Name']: 'ECS vpc-for-cdktf' }
-    });
-
-    const internetGateway = new InternetGateway(this, 'gateway-for-cdktf', {
-      vpcId: vpc.id,
-      tags:  {
-        'Name': 'ECS vpc-for-cdktf - InternetGateway'
-      }
-    });
-
-    const routeTable = new RouteTable(this, 'route-for-cdktf', {
-      vpcId: vpc.id,
-      route: [{
-        cidrBlock:              '0.0.0.0/0',
-        gatewayId:              internetGateway.id,
-        ipv6CidrBlock:          '',
-        egressOnlyGatewayId:    '',
-        instanceId:             '',
-        natGatewayId:           '',
-        networkInterfaceId:     '',
-        transitGatewayId:       '',
-        vpcPeeringConnectionId: ''
-      }],
-      tags: {
-        'Name': 'ECS route-table-for-cdktf'
-      }
-    });
-
-    const subnet1 = new Subnet(this, 'subnet-for-cdktf', {
-      vpcId:               Token.asString(vpc.id),
-      availabilityZone:    'ap-northeast-1a',
-      cidrBlock:           '10.0.0.0/24',
-      mapPublicIpOnLaunch: true,
-      tags:                { ['Name']: 'ECS subnet-for-cdktf Public Subnet1' }
-    });
-
-    const subnet2 = new Subnet(this, 'subnet-for-cdktf2', {
-      vpcId:               Token.asString(vpc.id),
-      availabilityZone:    'ap-northeast-1c',
-      cidrBlock:           '10.0.1.0/24',
-      mapPublicIpOnLaunch: true,
-      tags:                { ['Name']: 'ECS subnet-for-cdktf Public Subnet2' }
-    });
-
-    new RouteTableAssociation(this, 'route-for-cdktf1', {
-      routeTableId: routeTable.id,
-      subnetId:     subnet1.id
-    });
-
-    new RouteTableAssociation(this, 'route-for-cdktf2', {
-      routeTableId: routeTable.id,
-      subnetId:     subnet2.id
-    });
-
-    /*
-    new RouteTableAssociation(this, 'route-for-cdktf3', {
-      gatewayId:    internetGateway.id,
-      routeTableId: routeTable.id,
-    });
-    */
-
-    const security = new SecurityGroup(this, 'security-for-cdktf', {
-      name: 'security-for-cdktf',
-      vpcId: Token.asString(vpc.id)
-    });
-
-    new SecurityGroupRule(this, 'security-ingress-for-cdktf', {
-      cidrBlocks:      [vpc.cidrBlock],
-      fromPort:        9000,
-      protocol:        'tcp',
-      securityGroupId: security.id,
-      toPort:          9000,
-      type:            'ingress'
-    });
-
-    new SecurityGroupRule(this, 'security-egress-for-cdktf', {
-      cidrBlocks:      ['0.0.0.0/0'],
-      fromPort:        0,
-      protocol:        'all',
-      securityGroupId: security.id,
-      toPort:          0,
-      type:            'egress'
-    });
+    const security = SecurityModule.create(this, vpc)
+    SecurityModule.ingressRule(this, vpc, security)
+    SecurityModule.egressRule(this, security)
 
     const alb = new Alb(this, 'cdktf_for_alb', {
       name:             'cdktf-for-alb',
@@ -303,7 +116,7 @@ class CdktfStack extends TerraformStack {
       }],
       condition: [{
         field: 'path-pattern',
-        values: ['/target/']
+        values: ['*']
       }]
     });
 
@@ -344,13 +157,13 @@ class CdktfStack extends TerraformStack {
       family:                  'task-for-cdktf',
       networkMode:             'awsvpc',
       executionRoleArn:        ecsTaskExecutionRole.arn,
-      taskRoleArn:             ecstaskrole.arn,
+      taskRoleArn:             ecsTaskRole.arn,
       cpu:                     '512',
       memory:                  '1024',
       requiresCompatibilities: [LAUNCH_TYPE]
     });
 
-    const ecsService = new EcsService(this, 'container-for-cdktf-service', {
+    new EcsService(this, 'container-for-cdktf-service', {
       cluster:                         ecsCluster.id,
       deploymentMaximumPercent:        200,
       deploymentMinimumHealthyPercent: 100,
@@ -369,38 +182,6 @@ class CdktfStack extends TerraformStack {
         containerPort:  9000,
         targetGroupArn: albTargetGroup.arn
       }]
-    });
-
-    const lambdaExecutionIamPolicy = new IamPolicy(this, 'lambda_logging', {
-      name:        'lambda_logging',
-      description: 'IAM policy for logging from a lambda',
-      policy: `{
-        "Version":   "2012-10-17",
-        "Statement": [
-          {
-            "Action": [
-              "iam:PassRole",
-              "ecs:RegisterTaskDefinition",
-              "ecs:UpdateService",
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:PutLogEvents"
-            ],
-            "Resource": [
-              "*",
-              "arn:aws:logs:*:*:*",
-              "arn:aws:ecs:${REGION}:445682127642:service/${ecsCluster.name}/${ecsService.name}",
-              "arn:aws:iam::445682127642:role/ecsTaskExecutionRole_for_cdktf"
-            ],
-            "Effect": "Allow"
-          }
-        ]
-      }`
-    });
-
-    new IamRolePolicyAttachment(this, 'lambda_policy_attach', {
-      role:      lambdaExecutionRole.name,
-      policyArn: lambdaExecutionIamPolicy.arn
     });
 
     const s3Bucket = new S3Bucket(this, 's3-for-cdktf', {
