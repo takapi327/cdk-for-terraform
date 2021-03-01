@@ -72,11 +72,8 @@ class CdktfStack extends TerraformStack {
     const albListener    = AlbModule.createAlbListener(this, alb, albTargetGroup)
     AlbModule.createAlbListenerRule(this, albListener, albTargetGroup)
 
-    const ecsCluster = EcsModule.createCluster(this)
-
-    const ecsRepository = new EcrRepository(this, 'project/repository_for_cdktf', {
-      name: 'project/repository_for_cdktf'
-    });
+    const ecsCluster    = EcsModule.createCluster(this)
+    const ecsRepository = EcsModule.createRepository(this)
 
     const imageVersion:        string = 'latest'
     const containerDefinition: string = `[
