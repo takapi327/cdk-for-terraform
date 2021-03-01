@@ -5,10 +5,7 @@ import {
   AwsProvider,
   S3Bucket,
   S3BucketObject,
-  EcsCluster,
   EcsService,
-  EcrRepository,
-  EcsTaskDefinition,
   LambdaFunction,
   LambdaPermission,
   SnsTopic,
@@ -72,43 +69,9 @@ class CdktfStack extends TerraformStack {
     const albListener    = AlbModule.createAlbListener(this, alb, albTargetGroup)
     AlbModule.createAlbListenerRule(this, albListener, albTargetGroup)
 
-    const ecsCluster    = EcsModule.createCluster(this)
-    const ecsRepository = EcsModule.createRepository(this)
-
-    const imageVersion:        string = 'latest'
-    const containerDefinition: string = `[
-      {
-        "essential":    true,
-        "name":         "container-for-cdktf",
-        "image":        "${ecsRepository.repositoryUrl}:${imageVersion}",
-        "portMappings": [
-          {
-            "hostPort":      9000,
-            "protocol":      "tcp",
-            "containerPort": 9000
-          }
-        ],
-        "logConfiguration": {
-          "logDriver": "awslogs",
-          "options": {
-            "awslogs-group":         "/aws/ecs/task-for-cdktf",
-            "awslogs-stream-prefix": "ecs",
-            "awslogs-region":        "ap-northeast-1"
-          }
-        }
-      }
-    ]`
-
-    const ecsTaskDefinition = new EcsTaskDefinition(this, 'task-for-cdktf', {
-      containerDefinitions:    containerDefinition,
-      family:                  'task-for-cdktf',
-      networkMode:             'awsvpc',
-      executionRoleArn:        ecsTaskExecutionRole.arn,
-      taskRoleArn:             ecsTaskRole.arn,
-      cpu:                     '512',
-      memory:                  '1024',
-      requiresCompatibilities: [LAUNCH_TYPE]
-    });
+    const ecsCluster        = EcsModule.createCluster(this)
+    const ecsRepository     = EcsModule.createRepository(this)
+    const ecsTaskDefinition = EcsModule.createEcsTask(this, ecsRepository, ecsTaskRole, ecsTaskExecutionRole)
 
     new EcsService(this, 'container-for-cdktf-service', {
       cluster:                         ecsCluster.id,
