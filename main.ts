@@ -71,23 +71,8 @@ class CdktfStack extends TerraformStack {
     SecurityModule.ingressRule(this, vpc, security)
     SecurityModule.egressRule(this, security)
 
-    const alb = AlbModule.createAlb(this, security, [subnet1.id, subnet2.id])
-
-    const albTargetGroup = new AlbTargetGroup(this, 'cdktf_for_alb_target_group', {
-      name:       'cdktf-for-alb-target-group',
-      port:       9000,
-      protocol:   'HTTP',
-      targetType: 'ip',
-      vpcId:      vpc.id,
-      healthCheck: [{
-        interval:           30,
-        path:               '/',
-        port:               'traffic-port',
-        protocol:           'HTTP',
-        timeout:            5,
-        unhealthyThreshold: 2
-      }]
-    });
+    const alb            = AlbModule.createAlb(this, security, [subnet1.id, subnet2.id])
+    const albTargetGroup = AlbModule.createTargetGroup(this, vpc)
 
     const albListener = new AlbListener(this, 'cdktf_for_alb_listener', {
       loadBalancerArn: alb.arn,
