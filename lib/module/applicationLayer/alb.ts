@@ -50,4 +50,19 @@ export namespace AlbModule {
       }]
     });
   }
+
+  export function createAlbListenerRule(scope: Construct, albListener: AlbListener, albTargetGroup: AlbTargetGroup): AlbListenerRule {
+    return new AlbListenerRule(scope, 'cdktf_for_alb_listener_rule', {
+      listenerArn: albListener.arn,
+      priority:    100,
+      action:      [{
+        type:          'forward',
+        targetGroupArn: albTargetGroup.arn
+      }],
+      condition: [{
+        field: 'path-pattern',
+        values: ['*']
+      }]
+    });
+  }
 }

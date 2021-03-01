@@ -21,10 +21,6 @@ import {
   ApiGatewayDeployment,
   ApiGatewayStage,
   ApiGatewayIntegration,
-  Alb,
-  AlbTargetGroup,
-  AlbListener,
-  AlbListenerRule,
   CloudwatchEventRule,
   CloudwatchEventTarget,
   CloudwatchLogGroup
@@ -74,19 +70,7 @@ class CdktfStack extends TerraformStack {
     const alb            = AlbModule.createAlb(this, security, [subnet1.id, subnet2.id])
     const albTargetGroup = AlbModule.createTargetGroup(this, vpc)
     const albListener    = AlbModule.createAlbListener(this, alb, albTargetGroup)
-
-    new AlbListenerRule(this, 'cdktf_for_alb_listener_rule', {
-      listenerArn: albListener.arn,
-      priority:    100,
-      action:      [{
-        type:          'forward',
-        targetGroupArn: albTargetGroup.arn
-      }],
-      condition: [{
-        field: 'path-pattern',
-        values: ['*']
-      }]
-    });
+    AlbModule.createAlbListenerRule(this, albListener, albTargetGroup)
 
     const ecsCluster = new EcsCluster(this, 'cluster-for-cdktf', {
       name: 'cluster-for-cdktf'
