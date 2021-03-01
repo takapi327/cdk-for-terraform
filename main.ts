@@ -33,16 +33,16 @@ import {
 import { EcsTaskRoleModule, EcsTaskExecutionRoleModule, LambdaExecutionRoleModule } from './lib/module'
 import { VpcModule, InternetGatewayModule, RouteTableModule, SubnetModule } from './lib/module/networkLayer'
 import { SecurityModule } from './lib/module/securityLayer'
+import { AlbModule } from './lib/module/applicationLayer'
 
 class CdktfStack extends TerraformStack {
   constructor(scope: Construct, name: string) {
     super(scope, name);
 
-    const REGION:      string = 'ap-northeast-1'
     const LAUNCH_TYPE: string = 'FARGATE'
 
     new AwsProvider(this, 'aws-for-cdktf', {
-      region: REGION
+      region: 'ap-northeast-1'
     });
 
     const ecsTaskRole      = EcsTaskRoleModule.createRole(this)
@@ -71,15 +71,7 @@ class CdktfStack extends TerraformStack {
     SecurityModule.ingressRule(this, vpc, security)
     SecurityModule.egressRule(this, security)
 
-    const alb = new Alb(this, 'cdktf_for_alb', {
-      name:             'cdktf-for-alb',
-      internal:         false,
-      loadBalancerType: 'application',
-      securityGroups:   [security.id],
-      subnets:          [subnet1.id, subnet2.id],
-      ipAddressType:    'ipv4',
-      enableHttp2:      true
-    });
+    const alb = AlbModule.createAlb(this, security, [subnet1.id, subnet2.id])
 
     const albTargetGroup = new AlbTargetGroup(this, 'cdktf_for_alb_target_group', {
       name:       'cdktf-for-alb-target-group',
@@ -186,7 +178,7 @@ class CdktfStack extends TerraformStack {
 
     const s3Bucket = new S3Bucket(this, 's3-for-cdktf', {
       bucket: 's3-for-cdktf',
-      region: REGION
+      region: 'ap-northeast-1'
     });
 
     new S3BucketObject(this, 'update-image-of-ecr-dist.zip', {
