@@ -38,4 +38,16 @@ export namespace AlbModule {
       }]
     });
   }
+
+  export function createAlbListener(scope: Construct, alb: Alb, albTargetGroup: AlbTargetGroup): AlbListener {
+    return new AlbListener(scope, 'cdktf_for_alb_listener', {
+      loadBalancerArn: alb.arn,
+      port:            9000,
+      protocol:        'HTTP',
+      defaultAction:   [{
+        targetGroupArn: albTargetGroup.arn,
+        type:           'forward'
+      }]
+    });
+  }
 }

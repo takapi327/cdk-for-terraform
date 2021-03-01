@@ -73,16 +73,7 @@ class CdktfStack extends TerraformStack {
 
     const alb            = AlbModule.createAlb(this, security, [subnet1.id, subnet2.id])
     const albTargetGroup = AlbModule.createTargetGroup(this, vpc)
-
-    const albListener = new AlbListener(this, 'cdktf_for_alb_listener', {
-      loadBalancerArn: alb.arn,
-      port:            9000,
-      protocol:        'HTTP',
-      defaultAction:   [{
-        targetGroupArn: albTargetGroup.arn,
-        type:           'forward'
-      }]
-    });
+    const albListener    = AlbModule.createAlbListener(this, alb, albTargetGroup)
 
     new AlbListenerRule(this, 'cdktf_for_alb_listener_rule', {
       listenerArn: albListener.arn,
