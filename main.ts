@@ -1,4 +1,4 @@
-import { Construct }                  from 'constructs';
+import { Construct }           from 'constructs';
 import { App, TerraformStack } from 'cdktf';
 import * as path from 'path';
 import {
@@ -29,7 +29,7 @@ import {
 import { EcsTaskRoleModule, EcsTaskExecutionRoleModule, LambdaExecutionRoleModule } from './lib/module'
 import { VpcModule, InternetGatewayModule, RouteTableModule, SubnetModule } from './lib/module/networkLayer'
 import { SecurityModule } from './lib/module/securityLayer'
-import { AlbModule } from './lib/module/applicationLayer'
+import { AlbModule, EcsModule } from './lib/module/applicationLayer'
 
 class CdktfStack extends TerraformStack {
   constructor(scope: Construct, name: string) {
@@ -72,9 +72,7 @@ class CdktfStack extends TerraformStack {
     const albListener    = AlbModule.createAlbListener(this, alb, albTargetGroup)
     AlbModule.createAlbListenerRule(this, albListener, albTargetGroup)
 
-    const ecsCluster = new EcsCluster(this, 'cluster-for-cdktf', {
-      name: 'cluster-for-cdktf'
-    });
+    const ecsCluster = EcsModule.createCluster(this)
 
     const ecsRepository = new EcrRepository(this, 'project/repository_for_cdktf', {
       name: 'project/repository_for_cdktf'
