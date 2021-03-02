@@ -22,7 +22,7 @@ import {
 import { EcsTaskRoleModule, EcsTaskExecutionRoleModule, LambdaExecutionRoleModule } from './lib/module'
 import { VpcModule, InternetGatewayModule, RouteTableModule, SubnetModule } from './lib/module/networkLayer'
 import { SecurityModule } from './lib/module/securityLayer'
-import { AlbModule, EcsModule, S3Module, LambdaModule } from './lib/module/applicationLayer'
+import { AlbModule, EcsModule, S3Module, LambdaModule, CloudwatchModule } from './lib/module/applicationLayer'
 
 class CdktfStack extends TerraformStack {
   constructor(scope: Construct, name: string) {
@@ -92,13 +92,8 @@ class CdktfStack extends TerraformStack {
       }]
     )
 
-    new CloudwatchLogGroup(this, 'lambda_for_sns_log_group', {
-      name: `/aws/lambda/${lambda_for_sns.functionName}`
-    });
-
-    new CloudwatchLogGroup(this, 'ecs_task_log_group', {
-      name: `/aws/ecs/${ecsTaskDefinition.family}`
-    });
+    CloudwatchModule.createLogGroup(this, 'lambda_for_sns_log_group', `/aws/lambda/${lambda_for_sns.functionName}`)
+    CloudwatchModule.createLogGroup(this, 'ecs_task_log_group', `/aws/ecs/${ecsTaskDefinition.family}`)
 
     const lambda_for_slack_api = LambdaModule.createFunctionForAPI(
       this,
@@ -117,9 +112,7 @@ class CdktfStack extends TerraformStack {
       }]
     )
 
-    new CloudwatchLogGroup(this, 'lambda_for_slack_api_log_group', {
-      name: `/aws/lambda/${lambda_for_slack_api.functionName}`
-    });
+    CloudwatchModule.createLogGroup(this, 'lambda_for_slack_api_log_group', `/aws/lambda/${lambda_for_slack_api.functionName}`)
 
     const snsTopic = new SnsTopic(this, 'cdktf_for_sns', {
       name: 'cdktf_for_sns'
