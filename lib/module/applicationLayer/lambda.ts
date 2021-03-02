@@ -55,4 +55,13 @@ export namespace LambdaModule {
     });
   }
 
+  export function permissionLambdaForApi(scope: Construct, lambdaForSlackApi: LambdaFunction, sourceArn: string): LambdaPermission {
+    return new LambdaPermission(scope, 'lambda_permission_for_cdktf_lambda_api', {
+      action:       'lambda:InvokeFunction',
+      functionName: lambdaForSlackApi.functionName,
+      principal:    'apigateway.amazonaws.com',
+      sourceArn:    sourceArn,
+      statementId:  'AllowAPIGatewayInvoke'
+    });
+  }
 }

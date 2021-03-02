@@ -1,14 +1,6 @@
 import { Construct }           from 'constructs';
 import { App, TerraformStack } from 'cdktf';
-import {
-  AwsProvider,
-  LambdaPermission,
-  ApiGatewayDeployment,
-  ApiGatewayStage,
-  ApiGatewayIntegration,
-  CloudwatchEventRule,
-  CloudwatchEventTarget
-} from './.gen/providers/aws';
+import { AwsProvider } from './.gen/providers/aws';
 
 import { EcsTaskRoleModule, EcsTaskExecutionRoleModule, LambdaExecutionRoleModule } from './lib/module'
 import { VpcModule, InternetGatewayModule, RouteTableModule, SubnetModule } from './lib/module/networkLayer'
@@ -119,32 +111,11 @@ class CdktfStack extends TerraformStack {
     const apiDeploy = ApiGatewayModule.deployment(this, apiGateway)
     ApiGatewayModule.createStage(this, apiDeploy, apiGateway)
 
-    new LambdaPermission(this, 'lambda_permission_for_cdktf_lambda_api', {
-      action:       'lambda:InvokeFunction',
-      functionName: lambdaForSlackApi.functionName,
-      principal:    'apigateway.amazonaws.com',
-      sourceArn:    `${apiGateway.executionArn}/*/${apiMethod.httpMethod}/${apiGatewayResource.pathPart}`,
-      statementId:  'AllowAPIGatewayInvoke'
-    });
+    LambdaModule.permissionLambdaForApi(this, lambdaForSlackApi, `${apiGateway.executionArn}/*/${apiMethod.httpMethod}/${apiGatewayResource.pathPart}`)
 
-    const eventRule = new CloudwatchEventRule(this, 'cdktf_for_event_rule', {
-      name:        'capture_aws_ecr_update',
-      description: 'Capture each AWS ECR Update',
-      eventPattern: `{
-        "source": ["aws.ecr"],
-        "detail-type": ["ECR Image Action"],
-        "detail": {
-          "action-type": ["PUSH"],
-          "result": ["SUCCESS"]
-        }
-      }`
-    });
+    const eventRule = CloudwatchModule.createEventRule(this)
+    CloudwatchModule.createEventTarget(this, snsTopic, eventRule)
 
-    new CloudwatchEventTarget(this, 'cdktf_for_event_target', {
-      arn:      snsTopic.arn,
-      rule:     eventRule.name,
-      targetId: 'SendToSNS'
-    });
   }
 }
 
