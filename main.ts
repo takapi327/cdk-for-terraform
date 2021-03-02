@@ -25,13 +25,11 @@ import {
 import { EcsTaskRoleModule, EcsTaskExecutionRoleModule, LambdaExecutionRoleModule } from './lib/module'
 import { VpcModule, InternetGatewayModule, RouteTableModule, SubnetModule } from './lib/module/networkLayer'
 import { SecurityModule } from './lib/module/securityLayer'
-import { AlbModule, EcsModule } from './lib/module/applicationLayer'
+import { AlbModule, EcsModule, S3Module } from './lib/module/applicationLayer'
 
 class CdktfStack extends TerraformStack {
   constructor(scope: Construct, name: string) {
     super(scope, name);
-
-    const LAUNCH_TYPE: string = 'FARGATE'
 
     new AwsProvider(this, 'aws-for-cdktf', {
       region: 'ap-northeast-1'
@@ -80,10 +78,7 @@ class CdktfStack extends TerraformStack {
       albTargetGroup
     )
 
-    const s3Bucket = new S3Bucket(this, 's3-for-cdktf', {
-      bucket: 's3-for-cdktf',
-      region: 'ap-northeast-1'
-    });
+    const s3Bucket = S3Module.createBucket(this)
 
     new S3BucketObject(this, 'update-image-of-ecr-dist.zip', {
       bucket:      s3Bucket.bucket,
