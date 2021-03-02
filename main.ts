@@ -3,10 +3,6 @@ import { App, TerraformStack } from 'cdktf';
 import {
   AwsProvider,
   LambdaPermission,
-  ApiGatewayRestApi,
-  ApiGatewayMethod,
-  ApiGatewayMethodResponse,
-  ApiGatewayResource,
   ApiGatewayDeployment,
   ApiGatewayStage,
   ApiGatewayIntegration,
@@ -90,7 +86,7 @@ class CdktfStack extends TerraformStack {
     CloudwatchModule.createLogGroup(this, 'lambda_for_sns_log_group', `/aws/lambda/${lambdaForSns.functionName}`)
     CloudwatchModule.createLogGroup(this, 'ecs_task_log_group', `/aws/ecs/${ecsTaskDefinition.family}`)
 
-    const lambda_for_slack_api = LambdaModule.createFunctionForAPI(
+    const lambdaForSlackApi = LambdaModule.createFunctionForAPI(
       this,
       lambdaExecutionRole,
       s3Bucket,
@@ -107,7 +103,7 @@ class CdktfStack extends TerraformStack {
       }]
     )
 
-    CloudwatchModule.createLogGroup(this, 'lambda_for_slack_api_log_group', `/aws/lambda/${lambda_for_slack_api.functionName}`)
+    CloudwatchModule.createLogGroup(this, 'lambda_for_slack_api_log_group', `/aws/lambda/${lambdaForSlackApi.functionName}`)
 
     const snsTopic = SnsModule.createTopic(this)
     SnsModule.createSubscription(this, lambdaForSns, snsTopic)
@@ -115,53 +111,17 @@ class CdktfStack extends TerraformStack {
 
     LambdaModule.permissionLambdaForSNS(this, lambdaForSns, snsTopic)
 
-    const apiGateway = ApiGatewayModule.createRestApi(this)
-
-    const apiGatewayResource = new ApiGatewayResource(this, 'cdktf_for_api_resource', {
-      parentId:  apiGateway.rootResourceId,
-      pathPart:  'ecs-deploy',
-      restApiId: apiGateway.id
-    });
-
-    const apiMethod = new ApiGatewayMethod(this, 'cdktf_for_api_method', {
-      authorization: 'NONE',
-      httpMethod:    'POST',
-      resourceId:    apiGatewayResource.id,
-      restApiId:     apiGateway.id
-    });
-
-    new ApiGatewayMethodResponse(this, 'cdktf_for_api_method_response', {
-      httpMethod: apiMethod.httpMethod,
-      resourceId: apiGatewayResource.id,
-      restApiId:  apiGateway.id,
-      statusCode: '200',
-      responseModels: {
-        'application/json': 'Empty'
-      }
-    });
-
-    new ApiGatewayIntegration(this, 'cdktf_for_api_integration', {
-      httpMethod:            apiMethod.httpMethod,
-      restApiId:             apiGateway.id,
-      resourceId:            apiGatewayResource.id,
-      integrationHttpMethod: 'POST',
-      type:                  'AWS_PROXY',
-      uri:                   lambda_for_slack_api.invokeArn
-    });
-
-    const apiDeploy = new ApiGatewayDeployment(this, 'cdktf_for_apideploy', {
-      restApiId: apiGateway.id
-    });
-
-    new ApiGatewayStage(this, 'cdktf_for_api_stage', {
-      deploymentId: apiDeploy.id,
-      restApiId:    apiGateway.id,
-      stageName:    'cdktf_for_apistage'
-    });
+    const apiGateway         = ApiGatewayModule.createRestApi(this)
+    const apiGatewayResource = ApiGatewayModule.createResource(this, apiGateway)
+    const apiMethod          = ApiGatewayModule.createMethod(this, apiGatewayResource, apiGateway)
+    ApiGatewayModule.createResponse(this, apiMethod, apiGatewayResource, apiGateway)
+    ApiGatewayModule.createIntegration(this, apiMethod, apiGateway, apiGatewayResource, lambdaForSlackApi)
+    const apiDeploy = ApiGatewayModule.deployment(this, apiGateway)
+    ApiGatewayModule.createStage(this, apiDeploy, apiGateway)
 
     new LambdaPermission(this, 'lambda_permission_for_cdktf_lambda_api', {
       action:       'lambda:InvokeFunction',
-      functionName: lambda_for_slack_api.functionName,
+      functionName: lambdaForSlackApi.functionName,
       principal:    'apigateway.amazonaws.com',
       sourceArn:    `${apiGateway.executionArn}/*/${apiMethod.httpMethod}/${apiGatewayResource.pathPart}`,
       statementId:  'AllowAPIGatewayInvoke'
