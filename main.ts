@@ -22,7 +22,7 @@ import {
 import { EcsTaskRoleModule, EcsTaskExecutionRoleModule, LambdaExecutionRoleModule } from './lib/module'
 import { VpcModule, InternetGatewayModule, RouteTableModule, SubnetModule } from './lib/module/networkLayer'
 import { SecurityModule } from './lib/module/securityLayer'
-import { AlbModule, EcsModule, S3Module } from './lib/module/applicationLayer'
+import { AlbModule, EcsModule, S3Module, LambdaModule } from './lib/module/applicationLayer'
 
 class CdktfStack extends TerraformStack {
   constructor(scope: Construct, name: string) {
@@ -79,22 +79,18 @@ class CdktfStack extends TerraformStack {
     S3Module.createObject1(this, s3Bucket)
     S3Module.createObject2(this, s3Bucket)
 
-    const lambda_for_sns = new LambdaFunction(this, 'cdktf_for_slack_sns', {
-      functionName: 'cdktf_for_slack_sns',
-      handler:      'index.handler',
-      role:         lambdaExecutionRole.arn,
-      runtime:      'nodejs12.x',
-      s3Bucket:     s3Bucket.bucket,
-      s3Key:        'update-image-of-ecr-dist.zip',
-      timeout:      30,
-      environment:  [{
+    const lambda_for_sns = LambdaModule.createFunctionForSNS(
+      this,
+      lambdaExecutionRole,
+      s3Bucket,
+      [{
         variables: {
           ['SLACK_API_TOKEN']:      'xoxb-1276255441778-1782007042404-sSybUERnFKYRyHTHecs3kvr0',
           ['SLACK_CHANNEL']:        'C017PFW6D1D',
           ['SLACK_SIGNING_SECRET']: '967223f0520093c9f14d82d76e513441'
         }
       }]
-    });
+    )
 
     new CloudwatchLogGroup(this, 'lambda_for_sns_log_group', {
       name: `/aws/lambda/${lambda_for_sns.functionName}`
@@ -104,15 +100,11 @@ class CdktfStack extends TerraformStack {
       name: `/aws/ecs/${ecsTaskDefinition.family}`
     });
 
-    const lambda_for_slack_api = new LambdaFunction(this, 'cdktf_for_slack_api', {
-      functionName: 'cdktf_for_slack_api',
-      handler:      'index.handler',
-      role:         lambdaExecutionRole.arn,
-      runtime:      'nodejs12.x',
-      s3Bucket:     s3Bucket.bucket,
-      s3Key:        'update-task-of-ecs-dist.zip',
-      timeout:      30,
-      environment:  [{
+    const lambda_for_slack_api = LambdaModule.createFunctionForAPI(
+      this,
+      lambdaExecutionRole,
+      s3Bucket,
+      [{
         variables: {
           ['CLUSTER_NAME']:      ecsCluster.arn,
           ['DOCKER_IMAGE_PATH']: ecsRepository.repositoryUrl,
@@ -123,7 +115,7 @@ class CdktfStack extends TerraformStack {
           ['SECURITY']:          security.id
         }
       }]
-    });
+    )
 
     new CloudwatchLogGroup(this, 'lambda_for_slack_api_log_group', {
       name: `/aws/lambda/${lambda_for_slack_api.functionName}`
