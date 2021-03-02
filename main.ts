@@ -2,11 +2,7 @@ import { Construct }           from 'constructs';
 import { App, TerraformStack } from 'cdktf';
 import {
   AwsProvider,
-  LambdaFunction,
   LambdaPermission,
-  SnsTopic,
-  SnsTopicSubscription,
-  SnsTopicPolicy,
   ApiGatewayRestApi,
   ApiGatewayMethod,
   ApiGatewayMethodResponse,
@@ -15,14 +11,13 @@ import {
   ApiGatewayStage,
   ApiGatewayIntegration,
   CloudwatchEventRule,
-  CloudwatchEventTarget,
-  CloudwatchLogGroup
+  CloudwatchEventTarget
 } from './.gen/providers/aws';
 
 import { EcsTaskRoleModule, EcsTaskExecutionRoleModule, LambdaExecutionRoleModule } from './lib/module'
 import { VpcModule, InternetGatewayModule, RouteTableModule, SubnetModule } from './lib/module/networkLayer'
 import { SecurityModule } from './lib/module/securityLayer'
-import { AlbModule, EcsModule, S3Module, LambdaModule, CloudwatchModule } from './lib/module/applicationLayer'
+import { AlbModule, EcsModule, S3Module, LambdaModule, CloudwatchModule, SnsModule } from './lib/module/applicationLayer'
 
 class CdktfStack extends TerraformStack {
   constructor(scope: Construct, name: string) {
@@ -79,7 +74,7 @@ class CdktfStack extends TerraformStack {
     S3Module.createObject1(this, s3Bucket)
     S3Module.createObject2(this, s3Bucket)
 
-    const lambda_for_sns = LambdaModule.createFunctionForSNS(
+    const lambdaForSns = LambdaModule.createFunctionForSNS(
       this,
       lambdaExecutionRole,
       s3Bucket,
@@ -92,7 +87,7 @@ class CdktfStack extends TerraformStack {
       }]
     )
 
-    CloudwatchModule.createLogGroup(this, 'lambda_for_sns_log_group', `/aws/lambda/${lambda_for_sns.functionName}`)
+    CloudwatchModule.createLogGroup(this, 'lambda_for_sns_log_group', `/aws/lambda/${lambdaForSns.functionName}`)
     CloudwatchModule.createLogGroup(this, 'ecs_task_log_group', `/aws/ecs/${ecsTaskDefinition.family}`)
 
     const lambda_for_slack_api = LambdaModule.createFunctionForAPI(
@@ -114,39 +109,13 @@ class CdktfStack extends TerraformStack {
 
     CloudwatchModule.createLogGroup(this, 'lambda_for_slack_api_log_group', `/aws/lambda/${lambda_for_slack_api.functionName}`)
 
-    const snsTopic = new SnsTopic(this, 'cdktf_for_sns', {
-      name: 'cdktf_for_sns'
-    });
-
-    new SnsTopicSubscription(this, 'cdktf_for_sns_subscription', {
-      endpoint: lambda_for_sns.arn,
-      protocol: 'lambda',
-      topicArn: snsTopic.arn
-    });
-
-    new SnsTopicPolicy(this, 'cdktf_for_sns_policy', {
-      arn: snsTopic.arn,
-      policy: `{
-        "Version":   "2012-10-17",
-        "Statement": {
-          "Effect": "Allow",
-          "Sid":    "",
-          "Principal": {
-            "Service": "events.amazonaws.com"
-          },
-          "Action": [
-            "SNS:Publish"
-          ],
-          "Resource": [
-            "*"
-          ]
-        }
-      }`
-    });
+    const snsTopic = SnsModule.createTopic(this)
+    SnsModule.createSubscription(this, lambdaForSns, snsTopic)
+    SnsModule.createPolicy(this, snsTopic)
 
     new LambdaPermission(this, 'lambda_permission_for_cdktf_lambda_sns', {
       action:       'lambda:InvokeFunction',
-      functionName: lambda_for_sns.functionName,
+      functionName: lambdaForSns.functionName,
       principal:    'sns.amazonaws.com',
       sourceArn:    snsTopic.arn,
       statementId:  'AllowExecutionFromSNS'
