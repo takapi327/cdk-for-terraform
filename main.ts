@@ -5,7 +5,6 @@ import {
   AwsProvider,
   S3Bucket,
   S3BucketObject,
-  EcsService,
   LambdaFunction,
   LambdaPermission,
   SnsTopic,
@@ -72,27 +71,14 @@ class CdktfStack extends TerraformStack {
     const ecsCluster        = EcsModule.createCluster(this)
     const ecsRepository     = EcsModule.createRepository(this)
     const ecsTaskDefinition = EcsModule.createEcsTask(this, ecsRepository, ecsTaskRole, ecsTaskExecutionRole)
-
-    new EcsService(this, 'container-for-cdktf-service', {
-      cluster:                         ecsCluster.id,
-      deploymentMaximumPercent:        200,
-      deploymentMinimumHealthyPercent: 100,
-      desiredCount:                    1,
-      launchType:                      LAUNCH_TYPE,
-      name:                            'container-for-cdktf-service',
-      platformVersion:                 'LATEST',
-      taskDefinition:                  ecsTaskDefinition.id,
-      networkConfiguration:            [{
-        assignPublicIp: true,
-        securityGroups: [security.id],
-        subnets:        [subnet1.id, subnet2.id]
-      }],
-      loadBalancer: [{
-        containerName:  'container-for-cdktf',
-        containerPort:  9000,
-        targetGroupArn: albTargetGroup.arn
-      }]
-    });
+    EcsModule.createService(
+      this,
+      ecsCluster,
+      ecsTaskDefinition,
+      security,
+      [subnet1.id, subnet2.id],
+      albTargetGroup
+    )
 
     const s3Bucket = new S3Bucket(this, 's3-for-cdktf', {
       bucket: 's3-for-cdktf',

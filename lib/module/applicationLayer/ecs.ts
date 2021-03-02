@@ -3,7 +3,10 @@ import {
   EcsCluster,
   EcrRepository,
   EcsTaskDefinition,
-  IamRole
+  EcsService,
+  IamRole,
+  SecurityGroup,
+  AlbTargetGroup
 } from '../../../.gen/providers/aws';
 
 export namespace EcsModule {
@@ -57,6 +60,36 @@ export namespace EcsModule {
       cpu:                     '512',
       memory:                  '1024',
       requiresCompatibilities: [ 'FARGATE' ]
+    });
+  }
+
+  export function createService(
+    scope:             Construct,
+    ecsCluster:        EcsCluster,
+    ecsTaskDefinition: EcsTaskDefinition,
+    security:          SecurityGroup,
+    subnets:           string[],
+    albTargetGroup:    AlbTargetGroup
+  ): EcsService {
+    return new EcsService(scope, 'container-for-cdktf-service', {
+      cluster:                         ecsCluster.id,
+      deploymentMaximumPercent:        200,
+      deploymentMinimumHealthyPercent: 100,
+      desiredCount:                    1,
+      launchType:                      'FARGATE',
+      name:                            'container-for-cdktf-service',
+      platformVersion:                 'LATEST',
+      taskDefinition:                  ecsTaskDefinition.id,
+      networkConfiguration:            [{
+        assignPublicIp: true,
+        securityGroups: [security.id],
+        subnets:        subnets
+      }],
+      loadBalancer: [{
+        containerName:  'container-for-cdktf',
+        containerPort:  9000,
+        targetGroupArn: albTargetGroup.arn
+      }]
     });
   }
 }
