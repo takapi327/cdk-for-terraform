@@ -1,9 +1,11 @@
 import { Construct }   from 'constructs';
 import {
   IamRole,
-  LambdaFunction,
   S3Bucket,
-  LambdaFunctionEnvironment
+  SnsTopic,
+  LambdaFunction,
+  LambdaFunctionEnvironment,
+  LambdaPermission
 } from '../../../.gen/providers/aws';
 
 export namespace LambdaModule {
@@ -42,4 +44,15 @@ export namespace LambdaModule {
       environment:  variables
     });
   }
+
+  export function permissionLambdaForSNS(scope: Construct, lambdaForSns: LambdaFunction, snsTopic: SnsTopic): LambdaPermission {
+    return new LambdaPermission(scope, 'lambda_permission_for_cdktf_lambda_sns', {
+      action:       'lambda:InvokeFunction',
+      functionName: lambdaForSns.functionName,
+      principal:    'sns.amazonaws.com',
+      sourceArn:    snsTopic.arn,
+      statementId:  'AllowExecutionFromSNS'
+    });
+  }
+
 }

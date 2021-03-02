@@ -17,7 +17,7 @@ import {
 import { EcsTaskRoleModule, EcsTaskExecutionRoleModule, LambdaExecutionRoleModule } from './lib/module'
 import { VpcModule, InternetGatewayModule, RouteTableModule, SubnetModule } from './lib/module/networkLayer'
 import { SecurityModule } from './lib/module/securityLayer'
-import { AlbModule, EcsModule, S3Module, LambdaModule, CloudwatchModule, SnsModule } from './lib/module/applicationLayer'
+import { AlbModule, EcsModule, S3Module, LambdaModule, CloudwatchModule, SnsModule, ApiGatewayModule } from './lib/module/applicationLayer'
 
 class CdktfStack extends TerraformStack {
   constructor(scope: Construct, name: string) {
@@ -113,17 +113,9 @@ class CdktfStack extends TerraformStack {
     SnsModule.createSubscription(this, lambdaForSns, snsTopic)
     SnsModule.createPolicy(this, snsTopic)
 
-    new LambdaPermission(this, 'lambda_permission_for_cdktf_lambda_sns', {
-      action:       'lambda:InvokeFunction',
-      functionName: lambdaForSns.functionName,
-      principal:    'sns.amazonaws.com',
-      sourceArn:    snsTopic.arn,
-      statementId:  'AllowExecutionFromSNS'
-    });
+    LambdaModule.permissionLambdaForSNS(this, lambdaForSns, snsTopic)
 
-    const apiGateway = new ApiGatewayRestApi(this, 'cdktf_for_api_rest', {
-      name: 'cdktf_for_apigateway'
-    });
+    const apiGateway = ApiGatewayModule.createRestApi(this)
 
     const apiGatewayResource = new ApiGatewayResource(this, 'cdktf_for_api_resource', {
       parentId:  apiGateway.rootResourceId,
