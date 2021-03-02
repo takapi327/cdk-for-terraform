@@ -1,10 +1,7 @@
 import { Construct }           from 'constructs';
 import { App, TerraformStack } from 'cdktf';
-import * as path from 'path';
 import {
   AwsProvider,
-  S3Bucket,
-  S3BucketObject,
   LambdaFunction,
   LambdaPermission,
   SnsTopic,
@@ -79,20 +76,8 @@ class CdktfStack extends TerraformStack {
     )
 
     const s3Bucket = S3Module.createBucket(this)
-
-    new S3BucketObject(this, 'update-image-of-ecr-dist.zip', {
-      bucket:      s3Bucket.bucket,
-      key:         'update-image-of-ecr-dist.zip',
-      contentType: 'zip',
-      source:      path.resolve('./src/main/typescript/aws/lambda/slack/notification/update-image-of-ecr/update-image-of-ecr-dist/update-image-of-ecr-dist.zip')
-    });
-
-    new S3BucketObject(this, 'update-task-of-ecs-dist.zip', {
-      bucket:      s3Bucket.bucket,
-      key:         'update-task-of-ecs-dist.zip',
-      contentType: 'zip',
-      source:      path.resolve('./src/main/typescript/aws/lambda/slack/api/update-task-of-ecs/update-task-of-ecs-dist/update-task-of-ecs-dist.zip')
-    });
+    S3Module.createObject1(this, s3Bucket)
+    S3Module.createObject2(this, s3Bucket)
 
     const lambda_for_sns = new LambdaFunction(this, 'cdktf_for_slack_sns', {
       functionName: 'cdktf_for_slack_sns',
