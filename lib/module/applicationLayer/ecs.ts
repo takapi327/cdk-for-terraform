@@ -6,7 +6,8 @@ import {
   EcsService,
   IamRole,
   SecurityGroup,
-  AlbTargetGroup
+  AlbTargetGroup,
+  Subnet
 } from '../../../.gen/providers/aws';
 
 export namespace EcsModule {
@@ -68,7 +69,7 @@ export namespace EcsModule {
     ecsCluster:        EcsCluster,
     ecsTaskDefinition: EcsTaskDefinition,
     security:          SecurityGroup,
-    subnets:           string[],
+    subnet:            Subnet,
     albTargetGroup:    AlbTargetGroup
   ): EcsService {
     return new EcsService(scope, 'container-for-cdktf-service', {
@@ -83,7 +84,7 @@ export namespace EcsModule {
       networkConfiguration:            [{
         assignPublicIp: true,
         securityGroups: [security.id],
-        subnets:        subnets
+        subnets:        [subnet.id]
       }],
       loadBalancer: [{
         containerName:  'container-for-cdktf',
