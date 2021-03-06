@@ -3,7 +3,7 @@ import { App, TerraformStack } from 'cdktf';
 import { AwsProvider }         from './.gen/providers/aws';
 
 import { EcsTaskRoleModule, EcsTaskExecutionRoleModule, LambdaExecutionRoleModule } from './lib/module'
-import { VpcModule, InternetGatewayModule, RouteTableModule, SubnetModule } from './lib/module/networkLayer'
+import { VpcModule, InternetGatewayModule, NatGatewayModule, RouteTableModule, SubnetModule } from './lib/module/networkLayer'
 import { SecurityModule } from './lib/module/securityLayer'
 import { AlbModule, EcsModule, S3Module, LambdaModule, CloudwatchModule, SnsModule, ApiGatewayModule } from './lib/module/applicationLayer'
 
@@ -30,24 +30,18 @@ class CdktfStack extends TerraformStack {
     const vpc             = VpcModule.create(this)
     const internetGateway = InternetGatewayModule.create(this, vpc)
 
-    /** 不要になったら消す */
-    //const routeTable      = RouteTableModule.create(this, vpc, internetGateway)
-    /** RouteTable */
-    const publicRouteTable  = RouteTableModule.createPublic(this, vpc, internetGateway)
-    const privateRouteTable = RouteTableModule.createPrivate(this, vpc, internetGateway)
-
-    /** 不要になったら消す */
-    //const subnet1 = SubnetModule.create1(this, vpc)
-    //const subnet2 = SubnetModule.create2(this, vpc)
     /** Subnet */
     const publicSubnet1  = SubnetModule.createPublic1a(this, vpc)
     const publicSubnet2  = SubnetModule.createPublic2c(this, vpc)
     const privateSubnet1 = SubnetModule.createPrivate1a(this, vpc)
     const privateSubnet2 = SubnetModule.createPrivate2c(this, vpc)
 
-    /** 不要になったら消す */
-    //RouteTableModule.association(this, routeTable, subnet1, 'route-for-cdktf1')
-    //RouteTableModule.association(this, routeTable, subnet2, 'route-for-cdktf2')
+    const eip        = NatGatewayModule.eip(this)
+    const natGateway = NatGatewayModule.create(this, eip, publicSubnet1)
+
+    /** RouteTable */
+    const publicRouteTable  = RouteTableModule.createPublic(this, vpc, internetGateway)
+    const privateRouteTable = RouteTableModule.createPrivate(this, vpc, natGateway)
 
     /** Public RouteTableとの紐付け */
     RouteTableModule.association(this, publicRouteTable, publicSubnet1, 'rtb-public-1')
