@@ -21,7 +21,7 @@ class CdktfStack extends TerraformStack {
 
     const ecsTaskExecutionRole      = EcsTaskExecutionRoleModule.createRole(this)
     const ecsTaskExecutionIamPolicy = EcsTaskExecutionRoleModule.createPolicy(this)
-    EcsTaskExecutionRoleModule.attachmentRole(this, ecsTaskRole, ecsTaskExecutionIamPolicy)
+    EcsTaskExecutionRoleModule.attachmentRole(this, ecsTaskExecutionRole, ecsTaskExecutionIamPolicy)
 
     const lambdaExecutionRole      = LambdaExecutionRoleModule.createRole(this)
     const lambdaExecutionIamPolicy = LambdaExecutionRoleModule.createPolicy(this)
@@ -65,8 +65,9 @@ class CdktfStack extends TerraformStack {
     const alb              = AlbModule.createAlb(this, vpc, security, [publicSubnet1.id, publicSubnet2.id])
     const albTargetGroup   = AlbModule.createTargetGroup(this, vpc)
     const albListenerHTTP  = AlbModule.createAlbListenerHTTP(this, alb, albTargetGroup)
-    AlbModule.createAlbListenerHTTPS(this, alb, albTargetGroup)
-    AlbModule.createAlbListenerRule(this, albListenerHTTP, albTargetGroup)
+    const albListenerHTTPS = AlbModule.createAlbListenerHTTPS(this, alb, albTargetGroup)
+    AlbModule.createAlbListenerRuleHTTP(this, albListenerHTTP, albTargetGroup)
+    AlbModule.createAlbListenerRuleHTTPS(this, albListenerHTTPS, albTargetGroup)
 
     const ecsCluster        = EcsModule.createCluster(this)
     const ecsRepository     = EcsModule.createRepository(this)
@@ -74,7 +75,7 @@ class CdktfStack extends TerraformStack {
     EcsModule.createService(this,
       ecsCluster,
       ecsTaskDefinition,
-      security,
+      vpc,
       privateSubnet1,
       albTargetGroup
     )
@@ -110,8 +111,8 @@ class CdktfStack extends TerraformStack {
           ['SLACK_API_TOKEN']:   'xoxb-1276255441778-1782007042404-sSybUERnFKYRyHTHecs3kvr0',
           ['SLACK_CHANNEL']:     'C017PFW6D1D',
           ['SUBNET_1']:          privateSubnet1.id,
-          ['SUBNET_2']:          privateSubnet2.id,
-          ['SECURITY']:          security.id
+          //['SUBNET_2']:          privateSubnet2.id,
+          ['SECURITY']:          vpc.defaultSecurityGroupId
         }
       }]
     )
