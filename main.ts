@@ -1,6 +1,6 @@
 import { Construct }           from 'constructs';
 import { App, TerraformStack } from 'cdktf';
-import { AwsProvider } from './.gen/providers/aws';
+import { AwsProvider }         from './.gen/providers/aws';
 
 import { EcsTaskRoleModule, EcsTaskExecutionRoleModule, LambdaExecutionRoleModule } from './lib/module'
 import { VpcModule, InternetGatewayModule, RouteTableModule, SubnetModule } from './lib/module/networkLayer'
@@ -29,32 +29,53 @@ class CdktfStack extends TerraformStack {
 
     const vpc             = VpcModule.create(this)
     const internetGateway = InternetGatewayModule.create(this, vpc)
-    const routeTable      = RouteTableModule.create(this, vpc, internetGateway)
 
-    const subnet1 = SubnetModule.create1(this, vpc)
-    const subnet2 = SubnetModule.create2(this, vpc)
+    /** 不要になったら消す */
+    //const routeTable      = RouteTableModule.create(this, vpc, internetGateway)
+    /** RouteTable */
+    const publicRouteTable  = RouteTableModule.createPublic(this, vpc, internetGateway)
+    const privateRouteTable = RouteTableModule.createPrivate(this, vpc, internetGateway)
 
-    RouteTableModule.association(this, routeTable, subnet1, 'route-for-cdktf1')
-    RouteTableModule.association(this, routeTable, subnet2, 'route-for-cdktf2')
+    /** 不要になったら消す */
+    //const subnet1 = SubnetModule.create1(this, vpc)
+    //const subnet2 = SubnetModule.create2(this, vpc)
+    /** Subnet */
+    const publicSubnet1  = SubnetModule.createPublic1a(this, vpc)
+    const publicSubnet2  = SubnetModule.createPublic2c(this, vpc)
+    const privateSubnet1 = SubnetModule.createPrivate1a(this, vpc)
+    const privateSubnet2 = SubnetModule.createPrivate2c(this, vpc)
+
+    /** 不要になったら消す */
+    //RouteTableModule.association(this, routeTable, subnet1, 'route-for-cdktf1')
+    //RouteTableModule.association(this, routeTable, subnet2, 'route-for-cdktf2')
+
+    /** Public RouteTableとの紐付け */
+    RouteTableModule.association(this, publicRouteTable, publicSubnet1, 'rtb-public-1')
+    RouteTableModule.association(this, publicRouteTable, publicSubnet2, 'rtb-public-2')
+
+    /** Private RouteTableとの紐付け */
+    RouteTableModule.association(this, privateRouteTable, privateSubnet1, 'rtb-private-1')
+    RouteTableModule.association(this, privateRouteTable, privateSubnet2, 'rtb-private-2')
 
     const security = SecurityModule.create(this, vpc)
-    SecurityModule.ingressRule(this, vpc, security)
+    SecurityModule.ingressRuleHTTP(this, security)
+    SecurityModule.ingressRuleHTTPS(this, security)
     SecurityModule.egressRule(this, security)
 
-    const alb            = AlbModule.createAlb(this, security, [subnet1.id, subnet2.id])
-    const albTargetGroup = AlbModule.createTargetGroup(this, vpc)
-    const albListener    = AlbModule.createAlbListener(this, alb, albTargetGroup)
-    AlbModule.createAlbListenerRule(this, albListener, albTargetGroup)
+    const alb              = AlbModule.createAlb(this, vpc, security, [publicSubnet1.id, publicSubnet2.id])
+    const albTargetGroup   = AlbModule.createTargetGroup(this, vpc)
+    const albListenerHTTP  = AlbModule.createAlbListenerHTTP(this, alb, albTargetGroup)
+    AlbModule.createAlbListenerHTTPS(this, alb, albTargetGroup)
+    AlbModule.createAlbListenerRule(this, albListenerHTTP, albTargetGroup)
 
     const ecsCluster        = EcsModule.createCluster(this)
     const ecsRepository     = EcsModule.createRepository(this)
     const ecsTaskDefinition = EcsModule.createEcsTask(this, ecsRepository, ecsTaskRole, ecsTaskExecutionRole)
-    EcsModule.createService(
-      this,
+    EcsModule.createService(this,
       ecsCluster,
       ecsTaskDefinition,
       security,
-      [subnet1.id, subnet2.id],
+      privateSubnet1,
       albTargetGroup
     )
 
@@ -88,8 +109,8 @@ class CdktfStack extends TerraformStack {
           ['DOCKER_IMAGE_PATH']: ecsRepository.repositoryUrl,
           ['SLACK_API_TOKEN']:   'xoxb-1276255441778-1782007042404-sSybUERnFKYRyHTHecs3kvr0',
           ['SLACK_CHANNEL']:     'C017PFW6D1D',
-          ['SUBNET_1']:          subnet1.id,
-          ['SUBNET_2']:          subnet2.id,
+          ['SUBNET_1']:          privateSubnet1.id,
+          ['SUBNET_2']:          privateSubnet2.id,
           ['SECURITY']:          security.id
         }
       }]
