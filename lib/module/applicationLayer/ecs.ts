@@ -5,7 +5,7 @@ import {
   EcsTaskDefinition,
   EcsService,
   IamRole,
-  SecurityGroup,
+  Vpc,
   AlbTargetGroup,
   Subnet
 } from '../../../.gen/providers/aws';
@@ -68,7 +68,7 @@ export namespace EcsModule {
     scope:             Construct,
     ecsCluster:        EcsCluster,
     ecsTaskDefinition: EcsTaskDefinition,
-    security:          SecurityGroup,
+    vpc:               Vpc,
     subnet:            Subnet,
     albTargetGroup:    AlbTargetGroup
   ): EcsService {
@@ -82,8 +82,7 @@ export namespace EcsModule {
       platformVersion:                 'LATEST',
       taskDefinition:                  ecsTaskDefinition.id,
       networkConfiguration:            [{
-        assignPublicIp: true,
-        securityGroups: [security.id],
+        securityGroups: [vpc.defaultSecurityGroupId],
         subnets:        [subnet.id]
       }],
       loadBalancer: [{
