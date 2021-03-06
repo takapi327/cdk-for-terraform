@@ -61,12 +61,12 @@ export namespace RouteTableModule {
   /**
    * Private Route Table
    */
-  export function createPrivate(scope: Construct, vpc: Vpc): RouteTable {
+  export function createPrivate(scope: Construct, vpc: Vpc, internetGateway: InternetGateway): RouteTable {
     return new RouteTable(scope, 'rtb-private', {
       vpcId: vpc.id,
       route: [{
         cidrBlock:              '0.0.0.0/0',
-        gatewayId:              '',
+        gatewayId:              internetGateway.id,
         ipv6CidrBlock:          '',
         egressOnlyGatewayId:    '',
         instanceId:             '',
