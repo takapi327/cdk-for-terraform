@@ -15,6 +15,7 @@ class CdktfStack extends TerraformStack {
       region: 'ap-northeast-1'
     });
 
+    /** Role */
     const ecsTaskRole      = EcsTaskRoleModule.createRole(this)
     const ecsTaskIamPolicy = EcsTaskRoleModule.createPolicy(this)
     EcsTaskRoleModule.attachmentRole(this, ecsTaskRole, ecsTaskIamPolicy)
@@ -27,7 +28,10 @@ class CdktfStack extends TerraformStack {
     const lambdaExecutionIamPolicy = LambdaExecutionRoleModule.createPolicy(this)
     LambdaExecutionRoleModule.attachmentRole(this, lambdaExecutionRole, lambdaExecutionIamPolicy)
 
-    const vpc             = VpcModule.create(this)
+    /** VPC */
+    const vpc = VpcModule.create(this)
+
+    /** InternetGateway */
     const internetGateway = InternetGatewayModule.create(this, vpc)
 
     /** Subnet */
@@ -36,6 +40,7 @@ class CdktfStack extends TerraformStack {
     const privateSubnet1 = SubnetModule.createPrivate1a(this, vpc)
     const privateSubnet2 = SubnetModule.createPrivate2c(this, vpc)
 
+    /** NatGateway */
     const eip        = NatGatewayModule.eip(this)
     const natGateway = NatGatewayModule.create(this, eip, publicSubnet1)
 
@@ -51,11 +56,13 @@ class CdktfStack extends TerraformStack {
     RouteTableModule.association(this, privateRouteTable, privateSubnet1, 'rtb-private-1')
     RouteTableModule.association(this, privateRouteTable, privateSubnet2, 'rtb-private-2')
 
+    /** SecurityGroup */
     const security = SecurityModule.create(this, vpc)
     SecurityModule.ingressRuleHTTP(this, security)
     SecurityModule.ingressRuleHTTPS(this, security)
     SecurityModule.egressRule(this, security)
 
+    /** ApplicationLoadBalancer */
     const alb              = AlbModule.createAlb(this, vpc, security, [publicSubnet1.id, publicSubnet2.id])
     const albTargetGroup   = AlbModule.createTargetGroup(this, vpc)
     const albListenerHTTP  = AlbModule.createAlbListenerHTTP(this, alb, albTargetGroup)
@@ -63,6 +70,7 @@ class CdktfStack extends TerraformStack {
     AlbModule.createAlbListenerRuleHTTP(this, albListenerHTTP, albTargetGroup)
     AlbModule.createAlbListenerRuleHTTPS(this, albListenerHTTPS, albTargetGroup)
 
+    /** ElasticContainerService */
     const ecsCluster        = EcsModule.createCluster(this)
     const ecsRepository     = EcsModule.createRepository(this)
     const ecsTaskDefinition = EcsModule.createEcsTask(this, ecsRepository, ecsTaskRole, ecsTaskExecutionRole)
@@ -74,10 +82,12 @@ class CdktfStack extends TerraformStack {
       albTargetGroup
     )
 
+    /** S3 */
     const s3Bucket = S3Module.createBucket(this)
     S3Module.createObject1(this, s3Bucket)
     S3Module.createObject2(this, s3Bucket)
 
+    /** LambdaFunction */
     const lambdaForSns = LambdaModule.createFunctionForSNS(
       this,
       lambdaExecutionRole,
@@ -91,9 +101,7 @@ class CdktfStack extends TerraformStack {
       }]
     )
 
-    CloudwatchModule.createLogGroup(this, 'lambda_for_sns_log_group', `/aws/lambda/${lambdaForSns.functionName}`)
-    CloudwatchModule.createLogGroup(this, 'ecs_task_log_group', `/aws/ecs/${ecsTaskDefinition.family}`)
-
+    /** LambdaFunction */
     const lambdaForSlackApi = LambdaModule.createFunctionForAPI(
       this,
       lambdaExecutionRole,
@@ -111,14 +119,19 @@ class CdktfStack extends TerraformStack {
       }]
     )
 
+    /** CloudWatch */
+    CloudwatchModule.createLogGroup(this, 'lambda_for_sns_log_group',       `/aws/lambda/${lambdaForSns.functionName}`)
+    CloudwatchModule.createLogGroup(this, 'ecs_task_log_group',             `/aws/ecs/${ecsTaskDefinition.family}`)
     CloudwatchModule.createLogGroup(this, 'lambda_for_slack_api_log_group', `/aws/lambda/${lambdaForSlackApi.functionName}`)
 
+    /** SNS */
     const snsTopic = SnsModule.createTopic(this)
     SnsModule.createSubscription(this, lambdaForSns, snsTopic)
     SnsModule.createPolicy(this, snsTopic)
 
     LambdaModule.permissionLambdaForSNS(this, lambdaForSns, snsTopic)
 
+    /** APIGateway */
     const apiGateway         = ApiGatewayModule.createRestApi(this)
     const apiGatewayResource = ApiGatewayModule.createResource(this, apiGateway)
     const apiMethod          = ApiGatewayModule.createMethod(this, apiGatewayResource, apiGateway)

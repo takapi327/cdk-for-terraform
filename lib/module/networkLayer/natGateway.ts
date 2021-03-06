@@ -4,7 +4,7 @@ import { Eip, Subnet, NatGateway } from '../../../.gen/providers/aws';
 export namespace NatGatewayModule {
   export function create(scope: Construct, eip: Eip, subnet: Subnet): NatGateway {
     return new NatGateway(scope,'cdktf-nat-gateway', {
-      allocationId: eip.allocationId,
+      allocationId: eip.id,
       subnetId:     subnet.id,
       tags:         {
         'Name': 'cdktf nat-gateway'
