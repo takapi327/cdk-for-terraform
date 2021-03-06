@@ -12,13 +12,24 @@ export namespace SecurityModule {
     });
   }
 
-  export function ingressRule(scope: Construct, vpc: Vpc, security: SecurityGroup): SecurityGroupRule {
+  export function ingressRuleHTTP(scope: Construct, security: SecurityGroup): SecurityGroupRule {
     return new SecurityGroupRule(scope, 'security-ingress-for-cdktf', {
-      cidrBlocks:      [vpc.cidrBlock],
-      fromPort:        9000,
+      cidrBlocks:      ['0.0.0.0/0'],
+      fromPort:        80,
       protocol:        'tcp',
       securityGroupId: security.id,
-      toPort:          9000,
+      toPort:          80,
+      type:            'ingress'
+    });
+  }
+
+  export function ingressRuleHTTPS(scope: Construct, security: SecurityGroup): SecurityGroupRule {
+    return new SecurityGroupRule(scope, 'security-ingress-https', {
+      cidrBlocks:      ['0.0.0.0/0'],
+      fromPort:        443,
+      protocol:        'tcp',
+      securityGroupId: security.id,
+      toPort:          443,
       type:            'ingress'
     });
   }
