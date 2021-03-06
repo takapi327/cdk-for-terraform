@@ -33,13 +33,13 @@ export namespace LambdaModule {
     s3Bucket:            S3Bucket,
     variables:           LambdaFunctionEnvironment[]
   ): LambdaFunction {
-    return new LambdaFunction(scope, 'cdktf_for_slack_sns', {
-      functionName: 'cdktf_for_slack_sns',
+    return new LambdaFunction(scope, 'cdktf_for_slack_api', {
+      functionName: 'cdktf_for_slack_api',
       handler:      'index.handler',
       role:         lambdaExecutionRole.arn,
       runtime:      'nodejs12.x',
       s3Bucket:     s3Bucket.bucket,
-      s3Key:        'update-image-of-ecr-dist.zip',
+      s3Key:        'update-task-of-ecs-dist.zip',
       timeout:      30,
       environment:  variables
     });
